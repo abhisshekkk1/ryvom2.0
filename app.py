@@ -465,7 +465,7 @@ def app() -> None:
         st.divider()
         st.write(f"**{st.session_state.username.title()}**")
         st.caption(st.session_state.user_type.title())
-st.divider()
+        st.divider()
         with st.expander("⚙️ Account Settings"):
             new_my_pass = st.text_input("New Password", type="password", key="my_new_pass")
             if st.button("Update My Password"):
@@ -476,6 +476,7 @@ st.divider()
                     st.success("Password updated!")
         
         if st.button("Sign out"):
+        if st.button("Sign out"):
             reset_session()
             st.rerun()
     st.caption(f"{datetime.now():%A, %d %B %Y}")
@@ -484,13 +485,3 @@ st.divider()
 
 if __name__ == "__main__":
     app()
-
-st.divider()
-        with st.expander("⚙️ Account Settings"):
-            new_my_pass = st.text_input("New Password", type="password", key="my_new_pass")
-            if st.button("Update My Password"):
-                if len(new_my_pass) < 8:
-                    st.warning("Must be at least 8 characters.")
-                else:
-                    supabase.table("users").update({"password_hash": hash_password(new_my_pass)}).eq("id", st.session_state.user_id).execute()
-                    st.success("Password updated!")
