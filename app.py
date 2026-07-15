@@ -16,7 +16,14 @@ st.markdown(
     """
     <style>
       .stApp { background: #0b0b0e; color: #e2e8f0; }
-      header, footer { visibility: hidden; }
+      
+      /* Hide the default footer, but KEEP the header transparent so the mobile menu works */
+      footer { visibility: hidden; }
+      header { background: transparent !important; }
+      
+      /* Hide the Streamlit 'Deploy' button in the top right to keep it looking like a native app */
+      [data-testid="stToolbar"] { visibility: hidden; }
+      
       section[data-testid="stSidebar"] { background: #050507; border-right: 1px solid #202027; }
       .ry-card { background:#121216; border:1px solid #24242c; border-radius:16px; padding:20px; margin-bottom:16px; }
       .metric { font-size:28px; font-weight:800; margin:0; }
@@ -27,7 +34,6 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
-
 
 @st.cache_resource
 def get_supabase() -> Client:
