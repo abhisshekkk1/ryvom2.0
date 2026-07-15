@@ -1,0 +1,19 @@
+# Ignore virtual environments
+venv/
+.venv/
+env/
+
+# Ignore local secrets and configuration files
+.streamlit/secrets.toml
+.streamlit/config.toml
+
+# Ignore user media uploads & local databases
+uploads/
+coach_app.db
+
+# Ignore massive raw CSV data dumps
+FoodData_Central_csv_2026-04-30/
+
+# Ignore Python cache files
+__pycache__/
+*.pyc
