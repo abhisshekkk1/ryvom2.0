@@ -465,8 +465,7 @@ def app() -> None:
         st.divider()
         st.write(f"**{st.session_state.username.title()}**")
         st.caption(st.session_state.user_type.title())
-    # Paste this right here:
-        st.divider()
+st.divider()
         with st.expander("⚙️ Account Settings"):
             new_my_pass = st.text_input("New Password", type="password", key="my_new_pass")
             if st.button("Update My Password"):
@@ -475,6 +474,7 @@ def app() -> None:
                 else:
                     supabase.table("users").update({"password_hash": hash_password(new_my_pass)}).eq("id", st.session_state.user_id).execute()
                     st.success("Password updated!")
+        
         if st.button("Sign out"):
             reset_session()
             st.rerun()
