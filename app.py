@@ -42,16 +42,11 @@ supabase = get_supabase()
 
 
 def hash_password(password: str) -> str:
-    """Compatibility hash for the existing custom users table.
-
-    Use Supabase Auth before exposing Ryvom publicly; this keeps existing prototype
-    accounts working without storing new passwords as plain text.
-    """
+    """Compatibility hash for the existing custom users table."""
     return hashlib.sha256(password.encode("utf-8")).hexdigest()
 
 
 def verify_password(stored_hash: str, candidate: str) -> bool:
-    # Supports the original test account where the password was stored as plain text.
     return stored_hash == hash_password(candidate) or stored_hash == candidate
 
 
@@ -93,7 +88,6 @@ def find_foods(search_term: str) -> list[dict]:
 
 
 def get_or_create_barcode_food(item: dict) -> dict:
-    """Stores a scanned product as a normal food so meal_items always has a real UUID."""
     existing = (
         supabase.table("foods")
         .select("id,name,serving_g,calories,protein,carbs,fat")
@@ -183,7 +177,6 @@ def login_or_registration_page() -> None:
     st.markdown("<h1 style='text-align:center;letter-spacing:5px'>RYVOM</h1>", unsafe_allow_html=True)
     st.markdown("<p style='text-align:center;color:#ff334b;font-weight:700;letter-spacing:2px'>BUILD. TRACK. TRANSFORM.</p>", unsafe_allow_html=True)
     
-    # We add the 3rd recovery tab here
     login_tab, register_tab, recover_tab = st.tabs(["\U0001F512 Sign in", "\u2728 Create client account", "\U0001F511 Recover account"])
 
     with login_tab:
@@ -200,7 +193,6 @@ def login_or_registration_page() -> None:
                 st.error("Invalid username or password.")
                 return
             user = result[0]
-            # Upgrade the old plain-text prototype account after its first successful login.
             if user["password_hash"] == password:
                 supabase.table("users").update({"password_hash": hash_password(password)}).eq("id", user["id"]).execute()
             st.session_state.update(logged_in=True, user_id=user["id"], username=user["username"], user_type=user["role"])
@@ -420,7 +412,6 @@ def feedback_page() -> None:
                     
         st.divider()
         
-        # --- ADMIN PASSWORD OVERRIDE TOOL ---
         st.subheader("🔑 Admin Password Override")
         with st.form("admin_reset_form", clear_on_submit=True):
             target_reset_user = st.selectbox("Select Target Account to Reset", list(labels))
@@ -432,12 +423,10 @@ def feedback_page() -> None:
                     st.warning("Temporary password must be at least 4 characters.")
                 else:
                     try:
-                        # Update the hash securely in Supabase
                         supabase.table("users").update({"password_hash": hash_password(new_temp_pass)}).eq("username", target_reset_user).execute()
                         st.success(f"Success: Password for '{target_reset_user}' has been overridden.")
                     except Exception as e:
                         st.error(f"Database error: {e}")
-        # --- END ADMIN RESET TOOL ---
                     
     else:
         try:
@@ -465,6 +454,7 @@ def app() -> None:
         st.divider()
         st.write(f"**{st.session_state.username.title()}**")
         st.caption(st.session_state.user_type.title())
+        
         st.divider()
         with st.expander("⚙️ Account Settings"):
             new_my_pass = st.text_input("New Password", type="password", key="my_new_pass")
@@ -474,11 +464,11 @@ def app() -> None:
                 else:
                     supabase.table("users").update({"password_hash": hash_password(new_my_pass)}).eq("id", st.session_state.user_id).execute()
                     st.success("Password updated!")
-        
-        if st.button("Sign out"):
+                    
         if st.button("Sign out"):
             reset_session()
             st.rerun()
+            
     st.caption(f"{datetime.now():%A, %d %B %Y}")
     {"Dashboard": dashboard_page, "Nutrition": nutrition_page, "Log Food": log_food_page, "Workouts": workouts_page, "Progress": progress_page, "Feedback": feedback_page}[st.session_state.current_view]()
 
