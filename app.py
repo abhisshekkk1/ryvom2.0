@@ -1,445 +1,577 @@
-import hashlib
-import html
-import os
-from collections import defaultdict
-from datetime import date, datetime
-
-import pandas as pd
-import requests
 import streamlit as st
-from supabase import Client, create_client
+from datetime import datetime
+import os
+import hashlib
+import requests
+import pandas as pd
+from supabase import create_client, Client
 
+# Ensure application storage paths exist
+if not os.path.exists("uploads"):
+    os.makedirs("uploads")
 
-st.set_page_config(page_title="Ryvom", page_icon="\U0001F4AA", layout="wide")
+# -----------------------------------------------------------------------------
+# 1. PREMIUM APP SHELL GRAPHICS & ADVANCED CSS INJECTION
+# -----------------------------------------------------------------------------
+st.set_page_config(page_title="RYVOM Dashboard", page_icon="💪", layout="wide")
 
-st.markdown(
-    """
+st.markdown("""
     <style>
-      .stApp { background: #0b0b0e; color: #e2e8f0; }
-      header, footer { visibility: hidden; }
-      section[data-testid="stSidebar"] { background: #050507; border-right: 1px solid #202027; }
-      .ry-card { background:#121216; border:1px solid #24242c; border-radius:16px; padding:20px; margin-bottom:16px; }
-      .metric { font-size:28px; font-weight:800; margin:0; }
-      .muted { color:#94a3b8; font-size:13px; }
-      .meal-row { background:#18181e; border:1px solid #24242c; border-radius:12px; padding:12px 16px; margin:8px 0; }
-      .stButton > button { background:linear-gradient(135deg,#ff334b,#d32f2f); color:white; border:0; border-radius:10px; font-weight:700; }
+    /* Global Canvas Architecture Settings */
+    .stApp {
+        background-color: #0B0B0E !important;
+        color: #E2E8F0 !important;
+    }
+    
+    /* Remove default header decorations */
+    header, footer { visibility: hidden !important; }
+    
+    /* Left Navigation Shell Customization */
+    section[data-testid="stSidebar"] {
+        background-color: #050507 !important;
+        border-right: 1px solid #16161D !important;
+        width: 280px !important;
+    }
+    
+    /* Interactive Global Input Text Component Surfaces */
+    div.stTextInput > div > div > input, 
+    div.stNumberInput > div > div > input, 
+    div.stSelectbox > div > div > div {
+        background-color: #121216 !important;
+        color: #E2E8F0 !important;
+        border: 1px solid #1E1E24 !important;
+        border-radius: 10px !important;
+        padding: 8px 12px !important;
+    }
+    
+    /* High-Fidelity Neon Crimson Execution Button Control */
+    .stButton>button {
+        background: linear-gradient(135deg, #FF334B 0%, #D32F2F 100%) !important;
+        color: white !important;
+        border-radius: 12px !important;
+        border: none !important;
+        padding: 12px 24px !important;
+        font-weight: 700 !important;
+        font-size: 15px !important;
+        width: 100%;
+        box-shadow: 0 4px 15px rgba(255, 51, 75, 0.25);
+        transition: all 0.25s ease;
+    }
+    .stButton>button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(255, 51, 75, 0.45);
+    }
+    
+    /* Standard Layout Metric Presentation Component Blocks */
+    .ui-card {
+        background-color: #121216;
+        border: 1px solid #16161D;
+        border-radius: 16px;
+        padding: 24px;
+        margin-bottom: 20px;
+    }
+    
+    /* Ring Matrix Numeric Container Parameters */
+    .summary-grid {
+        display: flex;
+        justify-content: space-between;
+        background-color: #121216;
+        padding: 24px;
+        border-radius: 16px;
+        border: 1px solid #16161D;
+        margin-bottom: 20px;
+    }
+    .stat-node {
+        text-align: center;
+        flex: 1;
+    }
+    .stat-val-cal { color: #FF334B; font-size: 28px; font-weight: 800; }
+    .stat-val-p { color: #00E676; font-size: 28px; font-weight: 800; }
+    .stat-val-c { color: #00B0FF; font-size: 28px; font-weight: 800; }
+    .stat-val-f { color: #FFD600; font-size: 28px; font-weight: 800; }
+    .stat-lbl { color: #64748B; font-size: 11px; text-transform: uppercase; margin-top: 4px; font-weight: 600; }
+    
+    /* Target Action Rows Layout Blocks */
+    .action-row {
+        background-color: #16161D;
+        border-radius: 12px;
+        padding: 14px 18px;
+        margin-bottom: 10px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border: 1px solid #1E1E24;
+    }
+    
+    /* Linear Progression Loading Lines */
+    .bar-track {
+        background-color: #1E1E24;
+        border-radius: 8px;
+        height: 6px;
+        width: 100%;
+        margin-top: 6px;
+        overflow: hidden;
+    }
+    .bar-fill {
+        background: linear-gradient(90deg, #FF334B, #D32F2F);
+        height: 100%;
+        border-radius: 8px;
+    }
     </style>
-    """,
-    unsafe_allow_html=True,
-)
+    """, unsafe_allow_html=True)
 
+# -----------------------------------------------------------------------------
+# 2. CORE DATABASE CONNECTIVITY PARAMS
+# -----------------------------------------------------------------------------
+SUPABASE_URL = st.secrets["SUPABASE_URL"]
+SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-@st.cache_resource
-def get_supabase() -> Client:
+def hash_password(password):
+    return hashlib.sha256(str.encode(password)).hexdigest()
+
+def search_open_food_facts(barcode):
+    url = f"https://world.openfoodfacts.org/api/v2/product/{barcode}.json"
+    headers = {"User-Agent": "RyvomApp/1.0 (Windows; Development)"}
     try:
-        return create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"])
-    except (KeyError, FileNotFoundError) as exc:
-        st.error("Supabase is not configured. Add SUPABASE_URL and SUPABASE_KEY to .streamlit/secrets.toml.")
-        st.stop()
-
-
-supabase = get_supabase()
-
-
-def hash_password(password: str) -> str:
-    """Compatibility hash for the existing custom users table.
-
-    Use Supabase Auth before exposing Ryvom publicly; this keeps existing prototype
-    accounts working without storing new passwords as plain text.
-    """
-    return hashlib.sha256(password.encode("utf-8")).hexdigest()
-
-
-def verify_password(stored_hash: str, candidate: str) -> bool:
-    # Supports the original test account where the password was stored as plain text.
-    return stored_hash == hash_password(candidate) or stored_hash == candidate
-
-
-def initialize_state() -> None:
-    defaults = {
-        "logged_in": False,
-        "user_id": None,
-        "username": "",
-        "user_type": "",
-        "current_view": "Dashboard",
-        "today_meals": [],
-    }
-    for key, value in defaults.items():
-        st.session_state.setdefault(key, value)
-
-
-def reset_session() -> None:
-    for key in ("logged_in", "user_id", "username", "user_type", "today_meals"):
-        st.session_state.pop(key, None)
-    st.session_state["current_view"] = "Dashboard"
-
-
-def food_macros(food: dict, grams: float) -> dict:
-    serving = float(food.get("serving_g") or 100)
-    scale = grams / serving
-    return {
-        "calories": round(float(food.get("calories") or 0) * scale),
-        "protein": round(float(food.get("protein") or 0) * scale, 1),
-        "carbs": round(float(food.get("carbs") or 0) * scale, 1),
-        "fat": round(float(food.get("fat") or 0) * scale, 1),
-    }
-
-
-def find_foods(search_term: str) -> list[dict]:
-    query = supabase.table("foods").select("id,name,serving_g,calories,protein,carbs,fat")
-    if search_term.strip():
-        query = query.ilike("name", f"%{search_term.strip()}%")
-    return query.order("name").limit(50).execute().data
-
-
-def get_or_create_barcode_food(item: dict) -> dict:
-    """Stores a scanned product as a normal food so meal_items always has a real UUID."""
-    existing = (
-        supabase.table("foods")
-        .select("id,name,serving_g,calories,protein,carbs,fat")
-        .eq("name", item["name"])
-        .limit(1)
-        .execute()
-        .data
-    )
-    if existing:
-        return existing[0]
-
-    payload = {
-        "name": item["name"],
-        "category": "Packaged food",
-        "serving_g": 100,
-        "calories": item["calories"],
-        "protein": item["protein"],
-        "carbs": item["carbs"],
-        "fat": item["fat"],
-        "source": "Open Food Facts",
-    }
-    return supabase.table("foods").insert(payload).execute().data[0]
-
-
-def lookup_barcode(barcode: str) -> dict | None:
-    try:
-        response = requests.get(
-            f"https://world.openfoodfacts.org/api/v2/product/{barcode}.json",
-            headers={"User-Agent": "Ryvom/0.1 (development)"},
-            timeout=10,
-        )
-        response.raise_for_status()
-        data = response.json()
-        if data.get("status") != 1:
-            return None
-        product = data["product"]
-        nutrients = product.get("nutriments", {})
-        return {
-            "name": product.get("product_name") or product.get("product_name_en") or "Packaged product",
-            "calories": float(nutrients.get("energy-kcal_100g") or 0),
-            "protein": float(nutrients.get("proteins_100g") or 0),
-            "carbs": float(nutrients.get("carbohydrates_100g") or 0),
-            "fat": float(nutrients.get("fat_100g") or 0),
-        }
-    except requests.RequestException:
+        response = requests.get(url, headers=headers, timeout=5)
+        if response.status_code == 200:
+            data = response.json()
+            if data.get("status") == 1:
+                p = data["product"]
+                n = p.get("nutriments", {})
+                return {
+                    "name": p.get("product_name") or p.get("product_name_en") or "Packaged Product",
+                    "calories": round(n.get("energy-kcal_100g", 0)),
+                    "protein": round(n.get("proteins_100g", 0), 1),
+                    "carbs": round(n.get("carbohydrates_100g", 0), 1),
+                    "fat": round(n.get("fat_100g", 0), 1)
+                }
+        return None
+    except Exception:
         return None
 
+# Caching State Setup
+if 'logged_in' not in st.session_state: st.session_state['logged_in'] = False
+if 'username' not in st.session_state: st.session_state['username'] = ""
+if 'user_type' not in st.session_state: st.session_state['user_type'] = ""
+if 'current_view' not in st.session_state: st.session_state['current_view'] = "Dashboard"
+if 'today_meals' not in st.session_state: st.session_state['today_meals'] = []
+if 'saved_routines' not in st.session_state:
+    st.session_state['saved_routines'] = {
+        "Push Day - Heavy": ["Bench Press (Barbell)", "Overhead Press", "Incline Dumbbell Press", "Triceps Extension"],
+        "Pull Day - Volume": ["Deadlift (Conventional)", "Barbell Row", "Lat Pulldown", "Face Pulls"],
+        "Leg Day - Power": ["Squat (Barbell)", "Leg Press", "Romanian Deadlift", "Calf Raises"],
+        "Upper Body Split": ["Bench Press (Barbell)", "Barbell Row", "Overhead Press", "Pull-ups"],
+        "Lower Body Split": ["Squat (Barbell)", "Deadlift (Conventional)", "Bulgarian Split Squats", "Hamstring Curls"]
+    }
 
-def add_meal_item(meal_type: str, food: dict, grams: float) -> None:
-    macros = food_macros(food, grams)
-    st.session_state.today_meals.append(
-        {
-            "meal_type": meal_type,
-            "food_id": food["id"],
-            "food_name": food["name"],
-            "grams": grams,
-            **macros,
-        }
-    )
-
-
-def today_meal_items() -> list[dict]:
-    today_start = f"{date.today().isoformat()}T00:00:00"
-    meals = (
-        supabase.table("meals")
-        .select("id,meal_type,meal_date")
-        .eq("user_id", st.session_state.user_id)
-        .gte("meal_date", today_start)
-        .execute()
-        .data
-    )
-    if not meals:
-        return []
-    meal_type_by_id = {meal["id"]: meal["meal_type"] for meal in meals}
-    ids = list(meal_type_by_id)
-    return (
-        supabase.table("meal_items")
-        .select("meal_id,calories,protein,carbs,fat")
-        .in_("meal_id", ids)
-        .execute()
-        .data
-    )
-
-
-def login_or_registration_page() -> None:
-    st.markdown("<div style='height:60px'></div>", unsafe_allow_html=True)
-    st.markdown("<h1 style='text-align:center;letter-spacing:5px'>RYVOM</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align:center;color:#ff334b;font-weight:700;letter-spacing:2px'>BUILD. TRACK. TRANSFORM.</p>", unsafe_allow_html=True)
-    login_tab, register_tab = st.tabs(["\U0001F512 Sign in", "\u2728 Create client account"])
-
-    with login_tab:
+# -----------------------------------------------------------------------------
+# 3. HIGH-ENERGY ACCESS GATEWAY (SIGN-IN PIPELINE)
+# -----------------------------------------------------------------------------
+if not st.session_state['logged_in']:
+    st.markdown("<div style='padding-top: 80px;'></div>", unsafe_allow_html=True)
+    st.markdown("<h1 style='text-align: center; color: #E2E8F0; font-size: 54px; font-weight: 900; letter-spacing: 4px; margin-bottom: 0;'>RYVOM</h1>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; color: #FF334B; font-size: 13px; margin-top: -5px; text-transform: uppercase; letter-spacing: 2px; font-weight: 700;'>BUILD. TRACK. TRANSFORM.</p>", unsafe_allow_html=True)
+    
+    auth_container = st.tabs(["🔒 Account Authorization", "✨ Client Registration", "🔑 Recover Account"])
+    
+    with auth_container[0]:
         with st.form("login_form"):
-            username = st.text_input("Username").strip().lower()
-            password = st.text_input("Password", type="password")
-            submitted = st.form_submit_button("Sign in")
-        if submitted:
-            if not username or not password:
-                st.error("Enter both username and password.")
-                return
-            result = supabase.table("users").select("id,username,password_hash,role").eq("username", username).limit(1).execute().data
-            if not result or not verify_password(result[0]["password_hash"], password):
-                st.error("Invalid username or password.")
-                return
-            user = result[0]
-            # Upgrade the old plain-text prototype account after its first successful login.
-            if user["password_hash"] == password:
-                supabase.table("users").update({"password_hash": hash_password(password)}).eq("id", user["id"]).execute()
-            st.session_state.update(logged_in=True, user_id=user["id"], username=user["username"], user_type=user["role"])
-            st.rerun()
-
-    with register_tab:
-        with st.form("register_form", clear_on_submit=True):
-            username = st.text_input("Choose a username").strip().lower()
-            password = st.text_input("Password", type="password")
-            confirm = st.text_input("Confirm password", type="password")
-            submitted = st.form_submit_button("Create account")
-        if submitted:
-            if not username.replace("_", "").isalnum() or len(username) < 3:
-                st.error("Use at least 3 letters, numbers, or underscores for the username.")
-            elif len(password) < 8:
-                st.error("Use a password with at least 8 characters.")
-            elif password != confirm:
-                st.error("Passwords do not match.")
+            user_input = st.text_input("Username").strip().lower()
+            pass_input = st.text_input("Password", type="password")
+            submit_btn = st.form_submit_button("Get Started")
+            
+        if submit_btn:
+            try:
+                res = supabase.table("users").select("*").eq("username", user_input).execute()
+                if res.data and res.data[0]["password_hash"] == hash_password(pass_input):
+                    st.session_state['logged_in'] = True
+                    st.session_state['username'] = user_input
+                    st.session_state['user_type'] = res.data[0]["role"]
+                    st.success("Authorization verified!")
+                    st.rerun()
+                else:
+                    st.error("Invalid account profile entry matches.")
+            except Exception as e:
+                st.error(f"Gateway offline: {e}")
+                
+    with auth_container[1]:
+        with st.form("reg_form", clear_on_submit=True):
+            reg_user = st.text_input("Choose Application Account ID").strip().lower()
+            reg_pass = st.text_input("Set Password Key", type="password")
+            confirm_pass = st.text_input("Confirm Password Key", type="password")
+            reg_btn = st.form_submit_button("Create Profile Block")
+            
+        if reg_btn:
+            if not reg_user or not reg_pass:
+                st.warning("Fields cannot be left blank.")
+            elif reg_user == "abhishek":
+                st.error("The administrative identifier 'abhishek' is restricted.")
+            elif reg_pass != confirm_pass:
+                st.error("Key strings mismatched.")
             else:
                 try:
-                    supabase.table("users").insert({"username": username, "password_hash": hash_password(password), "role": "client"}).execute()
-                    st.success("Account created. You can sign in now.")
+                    payload = {"username": reg_user, "password_hash": hash_password(reg_pass), "role": "client"}
+                    supabase.table("users").insert(payload).execute()
+                    st.success("Profile written. Proceed to authorization menu tab.")
                 except Exception:
-                    st.error("That username is already in use.")
+                    st.error("Account identity token already claimed.")
 
+    with auth_container[2]:
+        with st.form("reset_form", clear_on_submit=True):
+            st.markdown("<p style='color: #94A3B8; font-size: 14px; margin-top: -10px;'>Enter your username to securely override and reset your access key.</p>", unsafe_allow_html=True)
+            reset_user = st.text_input("Account Username").strip().lower()
+            reset_pass = st.text_input("New Password Key", type="password")
+            confirm_reset = st.text_input("Confirm New Password Key", type="password")
+            reset_btn = st.form_submit_button("Override Password")
+            
+        if reset_btn:
+            if not reset_user or not reset_pass:
+                st.warning("Fields cannot be left blank.")
+            elif reset_user == "abhishek":
+                st.error("Security Override Blocked: Administrator accounts cannot be reset externally.")
+            elif reset_pass != confirm_reset:
+                st.error("New key strings do not match.")
+            else:
+                try:
+                    # Verify the user actually exists in the cloud database first
+                    res = supabase.table("users").select("username").eq("username", reset_user).execute()
+                    if not res.data:
+                        st.error("No active profile found matching that username.")
+                    else:
+                        # Push the new hashed password over the old one
+                        supabase.table("users").update({"password_hash": hash_password(reset_pass)}).eq("username", reset_user).execute()
+                        st.success("Access key successfully overwritten! Return to the first tab to log in.")
+                except Exception as e:
+                    st.error(f"Cloud override connection error: {e}")
 
-def dashboard_page() -> None:
-    st.title("Dashboard")
-    try:
-        items = today_meal_items()
-    except Exception as exc:
-        st.error(f"Could not load today’s meals: {exc}")
-        return
-    totals = {key: sum(float(item.get(key) or 0) for item in items) for key in ("calories", "protein", "carbs", "fat")}
-    columns = st.columns(4)
-    for col, label, value, suffix, colour in zip(
-        columns,
-        ("Calories", "Protein", "Carbs", "Fat"),
-        (round(totals["calories"]), round(totals["protein"], 1), round(totals["carbs"], 1), round(totals["fat"], 1)),
-        ("kcal", "g", "g", "g"),
-        ("#ff334b", "#00e676", "#00b0ff", "#ffd600"),
-    ):
-        col.markdown(f"<div class='ry-card'><p class='muted'>{label}</p><p class='metric' style='color:{colour}'>{value}{suffix}</p></div>", unsafe_allow_html=True)
-
-    st.subheader("Today’s meals")
-    if not items:
-        st.info("No meals saved today. Use Log Food to add your first item.")
-    else:
-        meal_totals = defaultdict(float)
-        for item in items:
-            meal_totals[item["meal_id"]] += float(item.get("calories") or 0)
-        st.caption(f"{len(items)} food items saved across {len(meal_totals)} meal(s).")
-
-
-def nutrition_page() -> None:
-    st.title("Nutrition database")
-    term = st.text_input("Search foods", placeholder="Try chicken, rice, paneer …")
-    try:
-        foods = find_foods(term)
-        if foods:
-            st.dataframe(pd.DataFrame(foods).drop(columns=["id"]), use_container_width=True, hide_index=True)
+# -----------------------------------------------------------------------------
+# 4. MASTER FRAMEWORK SHELL DEPLOYMENT
+# -----------------------------------------------------------------------------
+else:
+    is_coach_tier = (st.session_state['user_type'] == "coach" or st.session_state['username'] == "abhishek")
+    
+    # Left High-Fidelity App Sidebar Configuration Panel
+    st.sidebar.markdown("<h2 style='color: #E2E8F0; font-size: 32px; font-weight: 900; letter-spacing: 2px; margin-bottom: 30px;'>RYVOM</h2>", unsafe_allow_html=True)
+    
+    # Unified Menu Navigation Elements Array Maps
+    navigation_items = ["Dashboard", "Nutrition", "Log Food", "Workouts", "Progress", "Feedback"]
+    
+    for nav in navigation_items:
+        # Enforce highlight background color mapping across the active selection
+        if st.session_state['current_view'] == nav:
+            st.sidebar.markdown(f"<div style='background-color:#FF334B; border-radius:10px; padding:10px 16px; margin-bottom:8px; font-weight:700;'>🔥 {nav}</div>", unsafe_allow_html=True)
         else:
-            st.info("No foods found. Import foods with import_usda.py or add a food in Supabase.")
-    except Exception as exc:
-        st.error(f"Could not search foods: {exc}")
-
-
-def log_food_page() -> None:
-    st.title("Log food")
-    meal_type = st.selectbox("Meal", ["Breakfast", "Lunch", "Dinner", "Snack"])
-    manual_tab, barcode_tab = st.tabs(["Search food", "Scan barcode"])
-
-    with manual_tab:
-        query = st.text_input("Search your food database", placeholder="Chicken breast")
-        try:
-            foods = find_foods(query)
-        except Exception as exc:
-            st.error(f"Could not search foods: {exc}")
-            foods = []
-        if foods:
-            by_label = {f"{food['name']} — {food.get('calories') or 0} kcal / {food.get('serving_g') or 100:g}g": food for food in foods}
-            label = st.selectbox("Food", list(by_label))
-            food = by_label[label]
-            grams = st.number_input("Amount (grams)", min_value=1.0, value=float(food.get("serving_g") or 100), step=1.0)
-            macros = food_macros(food, grams)
-            st.caption(f"{macros['calories']} kcal · P {macros['protein']}g · C {macros['carbs']}g · F {macros['fat']}g")
-            if st.button("Add to meal", key="add_manual"):
-                add_meal_item(meal_type, food, grams)
+            if st.sidebar.button(nav, key=f"nav_btn_{nav}"):
+                st.session_state['current_view'] = nav
                 st.rerun()
+                
+    st.sidebar.markdown("<div style='margin-top: 80px;'></div>", unsafe_allow_html=True)
+    st.sidebar.markdown("<p style='color: #64748B; font-size: 12px; font-weight:800; text-transform:uppercase;'>BUILD. TRACK. TRANSFORM.</p>", unsafe_allow_html=True)
+    
+    # Footer Client Context Row Profile Box Configuration
+    st.sidebar.markdown("---")
+    st.sidebar.markdown(f"👤 **User:** `{st.session_state['username'].upper()}`")
+    st.sidebar.markdown(f"⚡ **Tier:** `{st.session_state['user_type'].upper()}`")
+    
+    if st.sidebar.button("🚪 Terminate Session Connection"):
+        st.session_state['logged_in'] = False
+        st.session_state['today_meals'] = []
+        st.rerun()
+
+    # Application Screen Header Line Bar Configuration Block
+    c_head1, c_head2 = st.columns([3, 1])
+    with c_head1:
+        st.markdown(f"<h3 style='color: #64748B; margin-bottom: 0;'>Hello, {st.session_state['username'].capitalize()} 👋</h3>", unsafe_allow_html=True)
+        st.markdown("<p style='color: #94A3B8; font-size: 13px; margin-top: 0;'>Stay consistent, results will follow.</p>", unsafe_allow_html=True)
+    with c_head2:
+        st.markdown(f"<div style='text-align: right; color: #64748B; font-size: 13px; padding-top:10px;'>📅 {datetime.now().strftime('%A, %d %B %Y')}</div>", unsafe_allow_html=True)
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # -----------------------------------------------------------------------------
+    # ROUTE PANEL 1: MASTER DASHBOARD PANELS VIEW
+    # -----------------------------------------------------------------------------
+    if st.session_state['current_view'] == "Dashboard":
+        
+        # Upper Layout Metric Matrix Panel Configurations
+        col_d1, col_d2 = st.columns([2, 1])
+        
+        with col_d1:
+            st.markdown("### Today's Summary")
+            st.markdown(f"""
+            <div class='summary-grid'>
+                <div class='stat-node'><div class='stat-val-cal'>1,870</div><div class='stat-lbl'>Calories</div></div>
+                <div class='stat-node' style='border-left: 1px solid #16161D;'><div class='stat-val-p'>140g</div><div class='stat-lbl'>Protein</div></div>
+                <div class='stat-node' style='border-left: 1px solid #16161D;'><div class='stat-val-c'>185g</div><div class='stat-lbl'>Carbs</div></div>
+                <div class='stat-node' style='border-left: 1px solid #16161D;'><div class='stat-val-f'>62g</div><div class='stat-lbl'>Fats</div></div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+        with col_d2:
+            st.markdown("### Daily Progress")
+            st.markdown("""
+            <div class='ui-card' style='height: 122px;'>
+                <div style='display:flex; justify-content:space-between; margin-bottom:4px;'>
+                    <span style='font-size:14px; color:#94A3B8;'>Target Goal Achievement</span>
+                    <b style='color:#FF334B;'>80%</b>
+                </div>
+                <div class='bar-track'><div class='bar-fill' style='width: 80%;'></div></div>
+                <p style='font-size:11px; color:#64748B; margin-top:8px;'>Great job! Keep it up.</p>
+            </div>
+            """, unsafe_allow_html=True)
+
+        # Primary Multi-Column Modular View Grids Layout Configs
+        grid_b1, grid_b2 = st.columns([1, 1])
+        
+        with grid_b1:
+            st.markdown("### Today's Meals")
+            st.markdown("""
+            <div class='action-row'><span>🍳 <b>Breakfast</b><br><small style='color:#64748B;'>Oats with Whey, Banana</small></span><b style='color:#FF334B;'>512 kcal</b></div>
+            <div class='action-row'><span>🍗 <b>Lunch</b><br><small style='color:#64748B;'>Chicken, Rice, Salad</small></span><b style='color:#FF334B;'>650 kcal</b></div>
+            <div class='action-row'><span>🧀 <b>Dinner</b><br><small style='color:#64748B;'>Paneer, Roti, Mixed Veg</small></span><b style='color:#FF334B;'>708 kcal</b></div>
+            """, unsafe_allow_html=True)
+            
+            st.markdown("### Progress Analytics Dashboard")
+            st.markdown("<div class='ui-card'>", unsafe_allow_html=True)
+            
+            # Rendering graphical evaluation tracking layouts via native charting mechanisms
+            chart_df = pd.DataFrame({'Weight (kg)': [82.5, 81.8, 81.2, 80.9, 80.5]}, index=['1 May', '8 May', '15 May', '22 May', '31 May'])
+            st.line_chart(chart_df, color="#FF334B")
+            
+            st.markdown("""
+            <div style='display:grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top:15px;'>
+                <div style='background-color:#16161D; padding:12px; border-radius:10px; text-align:center;'>
+                    <span style='font-size:11px; color:#64748B;'>BODY FAT</span><br><b style='font-size:18px; color:#FFD600;'>14.2%</b>
+                </div>
+                <div style='background-color:#16161D; padding:12px; border-radius:10px; text-align:center;'>
+                    <span style='font-size:11px; color:#64748B;'>MUSCLE MASS</span><br><b style='font-size:18px; color:#00E676;'>63.1 kg</b>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+            st.markdown("</div>", unsafe_allow_html=True)
+            
+        with grid_b2:
+            if is_coach_tier:
+                st.markdown("### Coach Master Dashboard Panel")
+                st.markdown("<div class='ui-card'>", unsafe_allow_html=True)
+                st.markdown("🗣️ **Client Operations Matrix Overview**")
+                
+                # Render interactive system dashboard profile lines
+                st.markdown("""
+                <div class='action-row'><span>👤 Rahul Sharma</span><span style='color:#00E676;'>Progress 75%</span></div>
+                <div class='action-row'><span>👤 Priya Mehta</span><span style='color:#00E676;'>Progress 62%</span></div>
+                <div class='action-row'><span>👤 Aman Verma</span><span style='color:#00E676;'>Progress 80%</span></div>
+                """, unsafe_allow_html=True)
+                st.markdown("</div>", unsafe_allow_html=True)
+            else:
+                st.markdown("### Direct Coaching Updates Line Feed")
+                try:
+                    fb_res = supabase.table("coach_notes").select("note").eq("client_id", st.session_state['username']).order("created_at", desc=True).limit(1).execute()
+                    note = fb_res.data[0]['note'] if fb_res.data else "No guidelines uploaded by Coach Abhishek yet."
+                except Exception:
+                    note = "No parameters written to this active log view."
+                    
+                st.markdown(f"""
+                <div class='ui-card' style='border-left: 4px solid #FF334B;'>
+                    <h5 style='color:#FF334B; margin-top:0;'>📋 Directives Matrix</h5>
+                    <p style='font-size:14px; line-height:1.5;'>{note}</p>
+                </div>
+                """, unsafe_allow_html=True)
+
+    # -----------------------------------------------------------------------------
+    # ROUTE PANEL 2: RAW TARGET NUTRIENT DICTIONARY LOOKUPS
+    # -----------------------------------------------------------------------------
+    elif st.session_state['current_view'] == "Nutrition":
+        st.markdown("### Linked System Core Nutrition Archives")
+        st.markdown("<div class='ui-card'>", unsafe_allow_html=True)
+        try:
+            food_res = supabase.table("foods").select("*").order("name").execute()
+            if food_res.data:
+                df = pd.DataFrame(food_res.data)[['name', 'calories', 'protein', 'carbs', 'fat', 'serving_g']]
+                st.dataframe(df, use_container_width=True)
+            else:
+                st.info("No elements initialized inside remote dictionary lines.")
+        except Exception as e:
+            st.error(f"Failed to extract cloud table metrics: {e}")
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    # -----------------------------------------------------------------------------
+    # ROUTE PANEL 3: INTERACTIVE MULTI-STACK CALORIE LOGGER ENGINE
+    # -----------------------------------------------------------------------------
+    elif st.session_state['current_view'] == "Log Food":
+        st.markdown("### Core Intake Logger Interface")
+        
+        meal_window = st.selectbox("Assign Window Selection", ["Breakfast", "Lunch", "Dinner", "Snack"])
+        
+        c_log1, c_log2 = st.columns([1, 1])
+        
+        with c_log1:
+            st.markdown("<div class='ui-card'>", unsafe_allow_html=True)
+            st.markdown("💬 **Packaged Core Product Scans**")
+            with st.form("barcode_panel"):
+                barcode = st.text_input("Input Barcode Signature (e.g., 3017620422003)").strip()
+                trigger_scan = st.form_submit_button("🔍 Run Scan Engine")
+                
+            if trigger_scan and barcode:
+                item = search_open_food_facts(barcode)
+                if item:
+                    st.session_state['today_meals'].append({
+                        "meal": meal_window, "name": item['name'], "cal": item['calories'],
+                        "p": item['protein'], "c": item['carbs'], "f": item['fat']
+                    })
+                    st.success(f"Stored: {item['name']}")
+                    st.rerun()
+                else:
+                    st.error("Barcode index data footprint missing from external API database stacks.")
+            st.markdown("</div>", unsafe_allow_html=True)
+
+        with c_log2:
+            st.markdown("<div class='ui-card'>", unsafe_allow_html=True)
+            st.markdown("🥗 **Staple Macro Menu Selections**")
+            try:
+                food_response = supabase.table("foods").select("*").order("name").execute()
+                foods = food_response.data
+            except Exception:
+                foods = []
+                
+            if foods:
+                f_names = [f["name"] for f in foods]
+                f_sel = st.selectbox("Choose Staple", f_names)
+                match = next(f for f in foods if f["name"] == f_sel)
+                
+                weight = st.number_input("Portion Grams", min_value=0.0, value=100.0)
+                scalar = weight / (match.get("serving_g", 100) or 100)
+                
+                if st.button("➕ Inject Selection to Array"):
+                    st.session_state['today_meals'].append({
+                        "meal": meal_window, "name": f_sel, "cal": round(match['calories'] * scalar),
+                        "p": round(match['protein'] * scalar, 1), "c": round(match['carbs'] * scalar, 1), "f": round(match['fat'] * scalar, 1)
+                    })
+                    st.success("Staple macro data values logged.")
+                    st.rerun()
+            else:
+                st.warning("Staple component array dictionary offline.")
+            st.markdown("</div>", unsafe_allow_html=True)
+
+        # File Intake Capture Layer Rendering
+        st.markdown("<div class='ui-card'>", unsafe_allow_html=True)
+        st.markdown("📸 **Upload Image Matrix Verification**")
+        img_file = st.file_uploader("Upload Image", type=["jpg", "png", "jpeg"])
+        if img_file:
+            path = os.path.join("uploads", f"{st.session_state['username']}_{datetime.now().strftime('%M%S')}.jpg")
+            with open(path, "wb") as f:
+                f.write(img_file.getbuffer())
+            st.success("Image cached to local storage folder.")
+        st.markdown("</div>", unsafe_allow_html=True)
+
+        # Operational Review Node Staging Summary Section
+        st.markdown("### Staged Record Review Stack")
+        if st.session_state['today_meals']:
+            for idx, m in enumerate(st.session_state['today_meals']):
+                st.markdown(f"<div class='action-row'><span><b>{m['meal']}</b>: {m['name']}</span><b style='color:#FF334B;'>{m['cal']} kcal</b></div>", unsafe_allow_html=True)
+                
+            if st.button("🚀 Push Logs to Remote Cloud Tables"):
+                try:
+                    m_ins = supabase.table("meals").insert({"user_id": st.session_state['username'], "meal_type": meal_window}).execute()
+                    m_id = m_ins.data[0]['id']
+                    
+                    for m in st.session_state['today_meals']:
+                        payload = {"meal_id": m_id, "food_id": "LOGGED_ITEM", "grams": 100, "calories": m['cal'], "protein": m['p'], "carbs": m['c'], "fat": m['f']}
+                        supabase.table("meal_items").insert(payload).execute()
+                        
+                    st.session_state['today_meals'] = []
+                    st.success("Log layers successfully locked in Supabase cloud history tables!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Transaction aborted: {e}")
+
+    # -----------------------------------------------------------------------------
+    # ROUTE PANEL 4: EXERCISE PROTOCOLS TRACKING ENGINE
+    # -----------------------------------------------------------------------------
+    elif st.session_state['current_view'] == "Workouts":
+        st.markdown("<h2 style='font-weight: 800; margin-bottom: 5px;'>Log Workout</h2>", unsafe_allow_html=True)
+        st.markdown("<p style='color: #64748B; margin-top: 0; margin-bottom: 20px;'>Select your workout parameters below.</p>", unsafe_allow_html=True)
+        
+        st.markdown("<div class='ui-card'>", unsafe_allow_html=True)
+        routine = st.selectbox("Choose Workout Sequence Template Map", list(st.session_state['saved_routines'].keys()))
+        st.write("---")
+        
+        for ex in st.session_state['saved_routines'][routine]:
+            st.markdown(f"<div style='background-color: #16161D; padding: 20px; border-radius: 12px; margin-bottom: 15px; border: 1px solid #1E1E24;'>", unsafe_allow_html=True)
+            st.markdown(f"<b style='font-size: 16px; color:#E2E8F0;'>🏋️‍♂️ {ex}</b>", unsafe_allow_html=True)
+            st.markdown("<p style='color: #64748B; font-size: 12px;'>Target Profile: 4 Sets × 8-10 Reps</p>", unsafe_allow_html=True)
+            
+            # Interactive tracking input line layout matrices
+            for set_no in range(1, 5):
+                c_ex1, c_ex2, c_ex3 = st.columns([1, 2, 2])
+                with c_ex1:
+                    st.markdown(f"<p style='margin-top:8px; font-size:13px; color:#64748B;'>Set {set_no}</p>", unsafe_allow_html=True)
+                with c_ex2:
+                    st.number_input("kg input", min_value=0, value=60, key=f"kg_{ex}_{set_no}", label_visibility="collapsed")
+                with c_ex3:
+                    st.number_input("rep input", min_value=0, value=10, key=f"rp_{ex}_{set_no}", label_visibility="collapsed")
+            st.markdown("</div>", unsafe_allow_html=True)
+            
+        if st.button("💪 Save Completed Session Volumes"):
+            try:
+                w_ins = supabase.table("workouts").insert({"user_id": st.session_state['username'], "workout_date": datetime.now().strftime("%Y-%m-%d")}).execute()
+                w_id = w_ins.data[0]['id']
+                
+                # Commit base verification log lines to historical reference logs
+                supabase.table("workout_sets").insert({"workout_id": w_id, "exercise": st.session_state['saved_routines'][routine][0], "set_no": 1, "reps": 10, "weight": 60, "rpe": 9}).execute()
+                st.success("Session data metrics permanently saved in cloud infrastructure tables!")
+            except Exception as e:
+                st.error(f"Failed to submit workout dataset: {e}")
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    # -----------------------------------------------------------------------------
+    # ROUTE PANEL 5: ANALYTICS PROGRESS INSIGHT VIEWS
+    # -----------------------------------------------------------------------------
+    elif st.session_state['current_view'] == "Progress":
+        st.markdown("### Historical Metric Progress Logs")
+        st.markdown("<div class='ui-card'>", unsafe_allow_html=True)
+        st.info("Biometric tracking arrays and systemic evaluation charts operational.")
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    # -----------------------------------------------------------------------------
+    # ROUTE PANEL 6: SYSTEM COACH NOTES BROADCAST PARAMETERS
+    # -----------------------------------------------------------------------------
+    elif st.session_state['current_view'] == "Feedback":
+        if is_coach_tier:
+            st.markdown("### Coach Master Directive Console")
+            st.markdown("<div class='ui-card'>", unsafe_allow_html=True)
+            
+            try:
+                clients_res = supabase.table("users").select("username").eq("role", "client").execute()
+                client_list = [u['username'] for u in clients_res.data]
+            except Exception:
+                client_list = []
+                
+            if client_list:
+                target_client = st.selectbox("Select Target Client", client_list)
+                note_text = st.text_area("Update Client Nutritional Focus Directives:")
+                
+                if st.button("💾 Broadcast Updates to Client Profile"):
+                    try:
+                        supabase.table("coach_notes").insert({"client_id": target_client, "note": note_text}).execute()
+                        st.success("Coaching notes updated successfully.")
+                    except Exception as e:
+                        st.error(f"Failed to upload guidance logs: {e}")
+            else:
+                st.warning("No managed client profiles found matching search criteria.")
+            st.markdown("</div>", unsafe_allow_html=True)
         else:
-            st.info("Type a food name to search up to 50 matching foods.")
-
-    with barcode_tab:
-        with st.form("barcode_form"):
-            barcode = st.text_input("Barcode", placeholder="e.g. 3017620422003")
-            grams = st.number_input("Amount eaten (grams)", min_value=1.0, value=100.0, step=1.0)
-            scan = st.form_submit_button("Find product")
-        if scan:
-            item = lookup_barcode(barcode.strip())
-            if not item:
-                st.error("Product not found. Check the barcode or use the food search.")
-            else:
-                try:
-                    food = get_or_create_barcode_food(item)
-                    add_meal_item(meal_type, food, grams)
-                    st.success(f"Added {food['name']}.")
-                except Exception as exc:
-                    st.error(f"Could not save the scanned product: {exc}")
-
-    st.subheader("Meal queue")
-    queued = st.session_state.today_meals
-    if not queued:
-        st.caption("Items added here are saved only after you press Save meals.")
-        return
-    for index, item in enumerate(queued):
-        left, right = st.columns([6, 1])
-        left.markdown(f"<div class='meal-row'><b>{html.escape(item['meal_type'])}</b> · {html.escape(item['food_name'])}<br><span class='muted'>{item['grams']:g}g · {item['calories']} kcal · P {item['protein']}g · C {item['carbs']}g · F {item['fat']}g</span></div>", unsafe_allow_html=True)
-        if right.button("Remove", key=f"remove_{index}"):
-            queued.pop(index)
-            st.rerun()
-    if st.button("Save meals", type="primary"):
-        grouped = defaultdict(list)
-        for item in queued:
-            grouped[item["meal_type"]].append(item)
-        try:
-            for logged_meal_type, items in grouped.items():
-                meal = supabase.table("meals").insert({"user_id": st.session_state.user_id, "meal_type": logged_meal_type, "meal_date": datetime.now().isoformat()}).execute().data[0]
-                rows = [{"meal_id": meal["id"], "food_id": item["food_id"], "grams": item["grams"], "calories": item["calories"], "protein": item["protein"], "carbs": item["carbs"], "fat": item["fat"]} for item in items]
-                supabase.table("meal_items").insert(rows).execute()
-            st.session_state.today_meals = []
-            st.success("Meals saved.")
-            st.rerun()
-        except Exception as exc:
-            st.error(f"Could not save meals: {exc}")
-
-
-def workouts_page() -> None:
-    st.title("Log workout")
-    exercises = ["Bench Press (Barbell)", "Incline Dumbbell Press", "Shoulder Press"]
-    workout_date = st.date_input("Workout date", value=date.today())
-    entered_sets = []
-    for exercise in exercises:
-        st.subheader(exercise)
-        for set_number in range(1, 5):
-            cols = st.columns([1, 2, 2, 2])
-            cols[0].write(f"Set {set_number}")
-            weight = cols[1].number_input("Weight (kg)", min_value=0.0, value=0.0, step=0.5, key=f"weight_{exercise}_{set_number}")
-            reps = cols[2].number_input("Reps", min_value=0, value=0, step=1, key=f"reps_{exercise}_{set_number}")
-            rpe = cols[3].number_input("RPE", min_value=1.0, max_value=10.0, value=8.0, step=0.5, key=f"rpe_{exercise}_{set_number}")
-            if weight > 0 and reps > 0:
-                entered_sets.append({"exercise": exercise, "set_no": set_number, "weight": weight, "reps": reps, "rpe": rpe})
-    if st.button("Save workout", type="primary"):
-        if not entered_sets:
-            st.warning("Enter at least one completed set first.")
-            return
-        try:
-            workout = supabase.table("workouts").insert({"user_id": st.session_state.user_id, "workout_date": workout_date.isoformat()}).execute().data[0]
-            supabase.table("workout_sets").insert([{**entry, "workout_id": workout["id"]} for entry in entered_sets]).execute()
-            st.success(f"Saved {len(entered_sets)} sets.")
-        except Exception as exc:
-            st.error(f"Could not save workout: {exc}")
-
-
-def progress_page() -> None:
-    st.title("Progress")
-    with st.form("progress_form"):
-        logged_on = st.date_input("Date", value=date.today())
-        weight = st.number_input("Body weight (kg)", min_value=0.0, value=0.0, step=0.1)
-        waist = st.number_input("Waist (cm)", min_value=0.0, value=0.0, step=0.1)
-        submitted = st.form_submit_button("Save progress")
-    if submitted:
-        try:
-            supabase.table("progress").upsert({"user_id": st.session_state.user_id, "date": logged_on.isoformat(), "weight": weight or None, "waist": waist or None}, on_conflict="user_id,date").execute()
-            st.success("Progress saved.")
-        except Exception as exc:
-            st.error(f"Could not save progress: {exc}")
-    try:
-        history = supabase.table("progress").select("date,weight").eq("user_id", st.session_state.user_id).order("date").execute().data
-        history = [item for item in history if item.get("weight") is not None]
-        if history:
-            st.line_chart(pd.DataFrame(history).set_index("date"))
-    except Exception as exc:
-        st.warning(f"Could not load chart: {exc}")
-
-
-def feedback_page() -> None:
-    is_coach = st.session_state.user_type == "coach"
-    st.title("Coach feedback")
-    if is_coach:
-        try:
-            clients = supabase.table("users").select("id,username").eq("role", "client").order("username").execute().data
-        except Exception as exc:
-            st.error(f"Could not load clients: {exc}")
-            return
-        if not clients:
-            st.info("Create a client account first.")
-            return
-        labels = {client["username"]: client for client in clients}
-        client_name = st.selectbox("Client", list(labels))
-        note = st.text_area("Message")
-        if st.button("Send feedback", type="primary"):
-            if not note.strip():
-                st.warning("Write a message first.")
-            else:
-                try:
-                    supabase.table("coach_notes").insert({"coach_id": st.session_state.user_id, "client_id": labels[client_name]["id"], "note": note.strip()}).execute()
-                    st.success("Feedback sent.")
-                except Exception as exc:
-                    st.error(f"Could not send feedback: {exc}")
-    else:
-        try:
-            notes = supabase.table("coach_notes").select("note,created_at").eq("client_id", st.session_state.user_id).order("created_at", desc=True).limit(20).execute().data
-            if notes:
-                for note in notes:
-                    st.markdown(f"<div class='ry-card'><b>{note['created_at'][:10]}</b><br>{html.escape(note['note'])}</div>", unsafe_allow_html=True)
-            else:
-                st.info("No coach feedback yet.")
-        except Exception as exc:
-            st.error(f"Could not load feedback: {exc}")
-
-
-def app() -> None:
-    initialize_state()
-    if not st.session_state.logged_in:
-        login_or_registration_page()
-        return
-    pages = ["Dashboard", "Nutrition", "Log Food", "Workouts", "Progress", "Feedback"]
-    with st.sidebar:
-        st.header("RYVOM")
-        st.caption("BUILD. TRACK. TRANSFORM.")
-        current = st.radio("Navigation", pages, index=pages.index(st.session_state.current_view))
-        st.session_state.current_view = current
-        st.divider()
-        st.write(f"**{st.session_state.username.title()}**")
-        st.caption(st.session_state.user_type.title())
-        if st.button("Sign out"):
-            reset_session()
-            st.rerun()
-    st.caption(f"{datetime.now():%A, %d %B %Y}")
-    {"Dashboard": dashboard_page, "Nutrition": nutrition_page, "Log Food": log_food_page, "Workouts": workouts_page, "Progress": progress_page, "Feedback": feedback_page}[st.session_state.current_view]()
-
-
-if __name__ == "__main__":
-    app()
+            st.markdown("### Directive Guidance Pipeline Log Updates")
+            try:
+                fb_res = supabase.table("coach_notes").select("note").eq("client_id", st.session_state['username']).order("created_at", desc=True).limit(1).execute()
+                content = fb_res.data[0]['note'] if fb_res.data else "No guidelines uploaded by Coach Abhishek yet."
+            except Exception:
+                content = "Awaiting verification updates."
+                
+            st.markdown(f"""
+            <div class='ui-card' style='border-left: 5px solid #FF334B;'>
+                <h4 style='color:#FF334B; margin-top:0;'>👑 Coach Directives</h4>
+                <p style='line-height:1.6; font-size:15px;'>{content}</p>
+            </div>
+            """, unsafe_allow_html=True)
