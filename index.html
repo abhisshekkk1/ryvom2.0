@@ -1,0 +1,1303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>RYVOM - Build. Track. Transform.</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0a0a0e;--bg2:#111116;--bg3:#18181e;--border:#24242c;
+  --text:#e2e8f0;--muted:#64748b;--muted2:#94a3b8;
+  --red:#ff334b;--red2:#c62828;--green:#22c55e;--yellow:#f59e0b;--blue:#3b82f6;--purple:#a855f7;
+  --sidebar-w:200px;
+}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-size:14px;line-height:1.5;overflow:hidden}
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.app{display:flex;height:100vh;overflow:hidden}
+/* Sidebar */
+.sidebar{width:var(--sidebar-w);flex-shrink:0;background:#0d0d12;border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;position:relative}
+.sidebar::after{content:'';position:absolute;bottom:0;left:0;right:0;height:240px;background:radial-gradient(ellipse at center bottom,rgba(255,51,75,.08) 0%,transparent 70%);pointer-events:none;z-index:0}
+.sidebar-logo{padding:15px 14px 11px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border)}
+.logo-text{font-size:21px;font-weight:900;letter-spacing:3px;color:#fff}
+.hamburger{margin-left:auto;background:none;border:none;color:var(--muted2);cursor:pointer;display:flex;flex-direction:column;gap:4px;padding:2px}
+.hamburger span{display:block;width:17px;height:2px;background:currentColor;border-radius:1px}
+.sidebar-nav{flex:1;padding:7px 9px;overflow-y:auto;z-index:1;position:relative}
+.nav-item{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;cursor:pointer;transition:all .15s;color:var(--muted2);font-size:13px;font-weight:500;position:relative}
+.nav-item:hover{background:var(--bg3);color:var(--text)}
+.nav-item.active{background:linear-gradient(135deg,rgba(255,51,75,.18),rgba(255,51,75,.05));color:var(--red);border-left:3px solid var(--red);padding-left:7px}
+.nav-icon{width:15px;height:15px;flex-shrink:0}
+.nav-badge{margin-left:auto;background:var(--red);color:#fff;font-size:9px;font-weight:700;padding:1px 5px;border-radius:10px}
+.sidebar-bottom{padding:10px;border-top:1px solid var(--border);z-index:1;position:relative}
+.sidebar-tagline{text-align:center;padding:6px 0 7px;font-size:13px;font-weight:700;line-height:1.5}
+.transform{color:var(--red);font-size:14px}
+.user-card{display:flex;align-items:center;gap:8px;padding:8px;border-radius:10px;background:var(--bg3);margin-bottom:6px}
+.avatar{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,var(--red),var(--red2));display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;color:#fff;flex-shrink:0}
+.user-name{font-weight:700;font-size:13px}
+.user-role{font-size:11px;color:var(--red)}
+.btn-switch{width:100%;display:flex;align-items:center;justify-content:center;gap:6px;padding:7px;border-radius:8px;border:1px solid var(--border);background:none;color:var(--muted2);font-size:11px;cursor:pointer;margin-bottom:4px;transition:all .15s}
+.btn-switch:hover{border-color:var(--red);color:var(--red)}
+.btn-logout{width:100%;display:flex;align-items:center;gap:7px;padding:7px 10px;border-radius:8px;background:none;border:none;color:var(--muted);font-size:12px;cursor:pointer;transition:all .15s}
+.btn-logout:hover{color:var(--red)}
+/* Main */
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.topbar{height:53px;flex-shrink:0;background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 17px;gap:13px}
+.tb-user{display:flex;align-items:center;gap:10px}
+.tb-av{width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,#f59e0b,#ef4444);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;color:#fff}
+.tb-greeting{font-weight:700;font-size:14px}
+.tb-sub{font-size:11px;color:var(--muted2)}
+.tb-mid{flex:1}
+.tb-date{display:flex;align-items:center;gap:6px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:5px 10px;font-size:12px;color:var(--muted2)}
+.tb-right{display:flex;align-items:center;gap:8px}
+.notif{position:relative;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:6px;cursor:pointer;color:var(--muted2);display:flex;transition:all .15s}
+.notif:hover{border-color:var(--red);color:var(--red)}
+.nb{position:absolute;top:-4px;right:-4px;background:var(--red);color:#fff;font-size:9px;font-weight:700;width:15px;height:15px;border-radius:50%;display:flex;align-items:center;justify-content:center}
+.tb-ua{width:31px;height:31px;border-radius:50%;background:linear-gradient(135deg,var(--red),var(--red2));display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;color:#fff;cursor:pointer}
+/* Content */
+.content{flex:1;overflow-y:auto;padding:13px 17px;display:flex;flex-direction:column;gap:12px}
+.page{display:none;flex-direction:column;gap:12px}
+.page.active{display:flex}
+.row{display:flex;gap:11px}
+.col{display:flex;flex-direction:column;gap:11px}
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:13px}
+.card-title{font-size:13px;font-weight:700;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between}
+.see-all{font-size:11px;color:var(--red);cursor:pointer;font-weight:500}
+.see-all:hover{text-decoration:underline}
+/* Macros */
+.summary-row{display:flex;gap:9px}
+.macro-card{flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:11px;display:flex;flex-direction:column;align-items:center;gap:5px}
+.macro-ring{width:43px;height:43px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:900;border:3px solid}
+.macro-value{font-size:18px;font-weight:800;line-height:1}
+.macro-label{font-size:11px;color:var(--muted2)}
+.macro-sub{font-size:10px;color:var(--muted)}
+.macro-bar{width:100%;height:4px;background:var(--bg);border-radius:2px;overflow:hidden}
+.macro-bar-fill{height:100%;border-radius:2px;transition:width .6s}
+/* Progress */
+.progress-big{font-size:38px;font-weight:800;color:var(--green);line-height:1}
+.progress-bar-h{width:100%;height:7px;background:var(--bg3);border-radius:4px;overflow:hidden;margin:7px 0}
+.progress-bar-fill{height:100%;border-radius:4px;background:linear-gradient(90deg,var(--red),var(--green))}
+.view-link{color:var(--red);font-size:12px;cursor:pointer;font-weight:500}
+.view-link:hover{text-decoration:underline}
+/* Quick actions */
+.quick-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.quick-btn{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px;display:flex;flex-direction:column;align-items:center;gap:5px;cursor:pointer;transition:all .2s;text-align:center}
+.quick-btn:hover{border-color:var(--red);background:rgba(255,51,75,.06)}
+.qicon{width:29px;height:29px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:14px}
+.qlabel{font-size:11px;font-weight:600;color:var(--muted2)}
+/* Meals */
+.meal-item{display:flex;align-items:center;gap:9px;padding:9px;border-radius:10px;background:var(--bg3);border:1px solid var(--border);margin-bottom:7px;position:relative}
+.meal-img{width:39px;height:39px;border-radius:8px;background:linear-gradient(135deg,#1a1a24,#2a2a34);display:flex;align-items:center;justify-content:center;font-size:19px;flex-shrink:0}
+.meal-info{flex:1;min-width:0}
+.meal-name{font-weight:600;font-size:13px}
+.meal-foods{font-size:11px;color:var(--muted2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.meal-macros{display:flex;gap:5px;margin-top:3px}
+.meal-kcal{font-size:11px;color:var(--muted2)}
+.macro-chip{font-size:10px;font-weight:600;padding:1px 5px;border-radius:4px}
+.meal-time{font-size:10px;color:var(--muted);position:absolute;right:27px;top:9px}
+.meal-menu{position:absolute;right:7px;top:50%;transform:translateY(-50%);color:var(--muted);cursor:pointer;font-size:16px}
+.add-meal-row{display:flex;align-items:center;justify-content:center;gap:6px;padding:9px;border-radius:10px;border:1px dashed var(--border);color:var(--muted2);font-size:12px;cursor:pointer;transition:all .15s}
+.add-meal-row:hover{border-color:var(--red);color:var(--red)}
+/* Log food */
+.log-tabs{display:flex;margin-bottom:9px;border-bottom:1px solid var(--border)}
+.log-tab{padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer;color:var(--muted2);border-bottom:2px solid transparent;transition:all .15s}
+.log-tab.active{color:var(--red);border-bottom-color:var(--red)}
+.search-bar{display:flex;align-items:center;gap:7px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:7px 10px;margin-bottom:9px}
+.search-bar input{flex:1;background:none;border:none;outline:none;color:var(--text);font-size:13px;font-family:inherit}
+.search-bar input::placeholder{color:var(--muted)}
+.filter-btn{background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:5px 7px;color:var(--muted2);cursor:pointer;font-size:11px}
+.filter-btn:hover{border-color:var(--red);color:var(--red)}
+.recent-label{font-size:12px;font-weight:600;color:var(--muted2);margin-bottom:6px;display:flex;justify-content:space-between}
+.food-item{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border)}
+.food-img{width:33px;height:33px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.food-info{flex:1}
+.food-name{font-size:12px;font-weight:600}
+.food-meta{font-size:10px;color:var(--muted2)}
+.add-btn{width:22px;height:22px;border-radius:50%;border:none;background:rgba(255,51,75,.15);color:var(--red);cursor:pointer;font-size:16px;font-weight:700;display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0}
+.add-btn:hover{background:var(--red);color:#fff}
+.nutrition-summary{background:var(--bg3);border-radius:8px;padding:10px;margin:9px 0}
+.nutr-row{display:flex;text-align:center}
+.nutr-item{flex:1}
+.nutr-value{font-size:17px;font-weight:800}
+.nutr-label{font-size:10px;color:var(--muted2);margin-top:2px}
+.selected-list{margin-bottom:9px}
+.selected-item{display:flex;align-items:center;gap:7px;padding:5px 0;border-bottom:1px solid var(--border)}
+.sel-img{width:29px;height:29px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0}
+.sel-info{flex:1;font-size:12px;font-weight:500}
+.sel-kcal{font-size:11px;color:var(--muted2)}
+.sel-remove{background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px}
+.sel-remove:hover{color:var(--red)}
+.add-meal-btn{width:100%;padding:11px;border-radius:10px;border:none;background:linear-gradient(135deg,var(--red),var(--red2));color:#fff;font-size:13px;font-weight:700;cursor:pointer}
+.add-meal-btn:hover{opacity:.9}
+.clear-btn{font-size:11px;color:var(--red);cursor:pointer}
+.clear-btn:hover{text-decoration:underline}
+/* Progress chart */
+.prog-tabs{display:flex;gap:6px;margin-bottom:9px}
+.prog-tab{padding:5px 10px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;background:none;border:1px solid var(--border);color:var(--muted2);transition:all .15s}
+.prog-tab.active{background:var(--red);border-color:var(--red);color:#fff}
+.weight-chart{background:linear-gradient(135deg,rgba(255,51,75,.09),rgba(255,51,75,.03));border:1px solid rgba(255,51,75,.18);border-radius:10px;padding:10px;margin-bottom:8px}
+.wc-label{font-size:11px;color:var(--muted2);margin-bottom:3px}
+.wc-value{font-size:18px;font-weight:800;color:var(--red)}
+.wc-sub{font-size:10px;color:var(--muted2)}
+.sparkline{height:44px;margin-top:6px}
+.sparkline svg{width:100%;height:100%}
+.stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.stat-item{background:var(--bg3);border-radius:8px;padding:8px}
+.stat-label{font-size:10px;color:var(--muted2);margin-bottom:2px}
+.stat-value{font-size:15px;font-weight:800}
+.stat-change{font-size:10px;margin-top:2px}
+.up{color:var(--green)}.down{color:var(--red)}
+/* Coach */
+.coach-stat{background:var(--bg3);border-radius:10px;padding:10px;display:flex;align-items:center;justify-content:space-between;margin-bottom:9px}
+.cs-label{font-size:11px;color:var(--muted2)}
+.cs-value{font-size:25px;font-weight:800;line-height:1.1}
+.cs-change{font-size:11px;color:var(--green)}
+.cs-icon{width:40px;height:40px;border-radius:50%;background:rgba(255,51,75,.12);display:flex;align-items:center;justify-content:center;font-size:18px}
+.coach-btns{display:flex;gap:6px;margin-bottom:11px}
+.coach-btn{flex:1;padding:7px;border-radius:8px;border:1px solid var(--border);background:none;color:var(--muted2);font-size:11px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:4px;transition:all .15s}
+.coach-btn:hover{border-color:var(--red);color:var(--red)}
+.client-item{display:flex;align-items:center;gap:7px;padding:6px 0;border-bottom:1px solid var(--border)}
+.client-av{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:10px;color:#fff;flex-shrink:0}
+.client-info{flex:1;min-width:0}
+.client-name{font-size:12px;font-weight:600}
+.client-prog{font-size:10px;color:var(--muted2)}
+.client-bar{height:3px;border-radius:2px;margin-top:3px;overflow:hidden;background:var(--border)}
+.client-bar-fill{height:100%;border-radius:2px;transition:width .6s}
+.client-x{background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px}
+.client-x:hover{color:var(--red)}
+.activity-item{display:flex;align-items:center;gap:7px;padding:7px 0;border-bottom:1px solid var(--border)}
+.act-av{width:27px;height:27px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:10px;color:#fff;flex-shrink:0}
+.act-info{flex:1}
+.act-name{font-size:12px;font-weight:600}
+.act-desc{font-size:10px;color:var(--muted2)}
+.act-time{font-size:10px;color:var(--muted)}
+/* Workouts */
+.workout-card{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:11px;margin-bottom:8px}
+.workout-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.workout-name{font-weight:700;font-size:14px}
+.workout-date{font-size:11px;color:var(--muted2)}
+.exercise-row{display:flex;align-items:center;gap:8px;padding:7px;background:var(--bg2);border-radius:8px;margin-bottom:5px}
+.ex-name{flex:1;font-size:12px;font-weight:600}
+.ex-sets{font-size:11px;color:var(--muted2)}
+.sets-row{display:grid;grid-template-columns:34px 1fr 1fr 1fr 1fr;gap:5px;margin-top:5px;font-size:11px}
+.sets-row.hdr{color:var(--muted);font-weight:600;align-items:center}
+.sets-row input[type=number]{background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:5px;text-align:center;color:var(--text);font-size:11px;font-family:inherit;outline:none}
+.sets-row input[type=number]:focus{border-color:var(--red)}
+.set-no{display:flex;align-items:center;justify-content:center;color:var(--muted)}
+.save-workout{width:100%;padding:9px;border-radius:8px;border:none;background:linear-gradient(135deg,var(--red),var(--red2));color:#fff;font-weight:700;font-size:13px;cursor:pointer;margin-top:7px}
+/* Settings */
+.settings-section{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:13px;margin-bottom:9px}
+.settings-section h3{font-size:13px;font-weight:700;margin-bottom:9px}
+.setting-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)}
+.setting-row:last-child{border-bottom:none}
+.setting-label{font-size:13px;font-weight:500}
+.setting-sub{font-size:11px;color:var(--muted2);margin-top:1px}
+.toggle{width:37px;height:20px;background:var(--border);border-radius:10px;position:relative;cursor:pointer;transition:background .2s}
+.toggle.on{background:var(--red)}
+.toggle::after{content:'';position:absolute;top:2px;left:2px;width:16px;height:16px;background:#fff;border-radius:50%;transition:left .2s}
+.toggle.on::after{left:19px}
+.inp{background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:5px 8px;color:var(--text);font-size:12px;font-family:inherit;outline:none}
+.inp:focus{border-color:var(--red)}
+.btn-red{padding:6px 14px;border-radius:7px;border:none;background:linear-gradient(135deg,var(--red),var(--red2));color:#fff;font-size:12px;font-weight:600;cursor:pointer}
+.btn-outline{padding:6px 14px;border-radius:7px;border:1px solid var(--border);background:none;color:var(--muted2);font-size:12px;cursor:pointer}
+.btn-outline:hover{border-color:var(--red);color:var(--red)}
+/* Feedback */
+.feedback-item{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:11px;margin-bottom:8px}
+.fb-header{display:flex;align-items:center;gap:7px;margin-bottom:7px}
+.fb-av{width:27px;height:27px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:10px;color:#fff}
+.fb-name{font-weight:600;font-size:13px}
+.fb-time{font-size:10px;color:var(--muted);margin-left:auto}
+.fb-text{font-size:12px;color:var(--muted2);line-height:1.6}
+/* Table */
+.nut-table{width:100%;border-collapse:collapse;font-size:12px}
+.nut-table th{padding:7px;text-align:left;color:var(--muted2);font-weight:600;border-bottom:1px solid var(--border)}
+.nut-table td{padding:8px 7px;border-bottom:1px solid rgba(36,36,44,.5)}
+.nut-table tr:hover td{background:var(--bg3)}
+/* Progress page chart */
+.progress-chart-area{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:11px}
+.chart-container{height:165px;position:relative;margin-top:7px}
+.chart-container svg{width:100%;height:100%}
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- SIDEBAR -->
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <img src="{{LOGO_BASE64}}" style="height:24px;width:24px;object-fit:contain;border-radius:4px;" alt="Logo"/>
+    <div class="logo-text">RYVOM</div>
+    <button class="hamburger"><span></span><span></span><span></span></button>
+  </div>
+  <nav class="sidebar-nav">
+    <div class="nav-item active" onclick="navigate('dashboard')">
+      <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+      Dashboard
+    </div>
+    <div class="nav-item" onclick="navigate('nutrition')">
+      <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+      Nutrition
+    </div>
+    <div class="nav-item" onclick="navigate('logfood')">
+      <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Log Food
+    </div>
+    <div class="nav-item" onclick="navigate('workouts')">
+      <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 4v16M18 4v16M6 12h12M3 6h3M18 6h3M3 18h3M18 18h3"/></svg>
+      Workouts
+    </div>
+    <div class="nav-item" onclick="navigate('progress')">
+      <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      Progress
+    </div>
+    <div class="nav-item" onclick="navigate('feedback')">
+      <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+      Feedback
+    </div>
+    <div class="nav-item" onclick="navigate('coaching')">
+      <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
+      Coaching
+    </div>
+    <div class="nav-item" onclick="navigate('clients')">
+      <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      Clients <span class="nav-badge">NEW</span>
+    </div>
+    <div class="nav-item" onclick="navigate('calendar')">
+      <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      Calendar
+    </div>
+    <div class="nav-item" onclick="navigate('messages')">
+      <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+      Messages
+    </div>
+    <div class="nav-item" onclick="navigate('settings')">
+      <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+      Settings
+    </div>
+  </nav>
+  <div class="sidebar-bottom">
+    <div class="sidebar-tagline">BUILD.<br>TRACK.<br><span class="transform">TRANSFORM.</span></div>
+    <div class="user-card" style="margin-top:8px">
+      <div class="avatar">A</div>
+      <div><div class="user-name">Abhishek</div><div class="user-role">Coach</div></div>
+    </div>
+    <button class="btn-switch" onclick="toggleClientSim()">👥 Switch to Client View</button>
+    <button class="btn-logout" onclick="var a = document.createElement('a'); a.href = '/?logout=1'; a.target = '_top'; document.body.appendChild(a); a.click();">← Logout</button>
+  </div>
+</aside>
+
+<!-- MAIN -->
+<div class="main">
+  <div class="topbar">
+    <div class="tb-user">
+      <div class="tb-av">A</div>
+      <div><div class="tb-greeting">Hello, Abhishek &#x1F44B;</div><div class="tb-sub">Stay consistent, results will follow.</div></div>
+    </div>
+    <div class="tb-mid"></div>
+    <div class="tb-date">&#128197; <span id="topbar-date"></span></div>
+    <div class="tb-right">
+      <div class="notif">&#128276;<span class="nb">3</span></div>
+      <div class="tb-ua">A</div>
+    </div>
+  </div>
+
+  <div class="content">
+
+    <!-- DASHBOARD PAGE -->
+    <div class="page active" id="page-dashboard">
+      <!-- Row 1 -->
+      <div class="row">
+        <div class="card" style="flex:2">
+          <div class="card-title">Today's Summary</div>
+          <div class="summary-row">
+            <div class="macro-card">
+              <div class="macro-ring" style="color:#ef4444;border-color:#ef4444;background:rgba(239,68,68,.1)">&#128293;</div>
+              <div class="macro-value">1,870</div><div class="macro-label">Calories</div><div class="macro-sub">of 2,300 kcal</div>
+              <div class="macro-bar"><div class="macro-bar-fill" style="width:81%;background:#ef4444"></div></div>
+            </div>
+            <div class="macro-card">
+              <div class="macro-ring" style="color:#22c55e;border-color:#22c55e;background:rgba(34,197,94,.1)">P</div>
+              <div class="macro-value">140g</div><div class="macro-label">Protein</div><div class="macro-sub">of 150g</div>
+              <div class="macro-bar"><div class="macro-bar-fill" style="width:93%;background:#22c55e"></div></div>
+            </div>
+            <div class="macro-card">
+              <div class="macro-ring" style="color:#f59e0b;border-color:#f59e0b;background:rgba(245,158,11,.1)">C</div>
+              <div class="macro-value">185g</div><div class="macro-label">Carbs</div><div class="macro-sub">of 220g</div>
+              <div class="macro-bar"><div class="macro-bar-fill" style="width:84%;background:#f59e0b"></div></div>
+            </div>
+            <div class="macro-card">
+              <div class="macro-ring" style="color:#3b82f6;border-color:#3b82f6;background:rgba(59,130,246,.1)">F</div>
+              <div class="macro-value">62g</div><div class="macro-label">Fats</div><div class="macro-sub">of 70g</div>
+              <div class="macro-bar"><div class="macro-bar-fill" style="width:89%;background:#3b82f6"></div></div>
+            </div>
+          </div>
+        </div>
+        <div class="card" style="flex:1">
+          <div class="card-title">Daily Progress</div>
+          <div class="progress-big">80%</div>
+          <div class="progress-bar-h"><div class="progress-bar-fill" style="width:80%"></div></div>
+          <div style="font-size:12px;color:var(--muted2);margin-bottom:10px">Great job! Keep it up.</div>
+          <div class="view-link" onclick="navigate('progress')">View Progress &#8594;</div>
+        </div>
+        <div class="card" style="flex:1">
+          <div class="card-title">Quick Actions</div>
+          <div class="quick-grid">
+            <div class="quick-btn" onclick="navigate('logfood')"><div class="qicon" style="background:rgba(255,51,75,.12)">&#127869;</div><div class="qlabel">Log Food</div></div>
+            <div class="quick-btn" onclick="navigate('workouts')"><div class="qicon" style="background:rgba(59,130,246,.12)">&#128170;</div><div class="qlabel">Log Workout</div></div>
+            <div class="quick-btn" onclick="navigate('progress')"><div class="qicon" style="background:rgba(34,197,94,.12)">&#128200;</div><div class="qlabel">Progress</div></div>
+            <div class="quick-btn" onclick="navigate('feedback')"><div class="qicon" style="background:rgba(168,85,247,.12)">&#128172;</div><div class="qlabel">Feedback</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Row 2 -->
+      <div class="row">
+        <!-- Meals -->
+        <div class="card col" style="flex:1.1">
+          <div class="card-title">Today's Meals <span class="see-all" onclick="navigate('logfood')">View All</span></div>
+          <div class="meal-item">
+            <div class="meal-img">&#x1F963;</div>
+            <div class="meal-info">
+              <div class="meal-name">Breakfast</div>
+              <div class="meal-foods">Oats with Whey, Banana</div>
+              <div class="meal-macros">
+                <span class="meal-kcal">512 kcal</span>
+                <span class="macro-chip" style="background:rgba(34,197,94,.15);color:#22c55e">P 35g</span>
+                <span class="macro-chip" style="background:rgba(245,158,11,.15);color:#f59e0b">C 68g</span>
+                <span class="macro-chip" style="background:rgba(59,130,246,.15);color:#3b82f6">F 12g</span>
+              </div>
+            </div>
+            <div class="meal-time">8:30 AM</div><div class="meal-menu">&#8942;</div>
+          </div>
+          <div class="meal-item">
+            <div class="meal-img">&#x1F357;</div>
+            <div class="meal-info">
+              <div class="meal-name">Lunch</div>
+              <div class="meal-foods">Chicken, Rice, Salad</div>
+              <div class="meal-macros">
+                <span class="meal-kcal">650 kcal</span>
+                <span class="macro-chip" style="background:rgba(34,197,94,.15);color:#22c55e">P 42g</span>
+                <span class="macro-chip" style="background:rgba(245,158,11,.15);color:#f59e0b">C 72g</span>
+                <span class="macro-chip" style="background:rgba(59,130,246,.15);color:#3b82f6">F 18g</span>
+              </div>
+            </div>
+            <div class="meal-time">1:15 PM</div><div class="meal-menu">&#8942;</div>
+          </div>
+          <div class="meal-item">
+            <div class="meal-img">&#x1FAD5;</div>
+            <div class="meal-info">
+              <div class="meal-name">Dinner</div>
+              <div class="meal-foods">Paneer, Roti, Mixed Veg</div>
+              <div class="meal-macros">
+                <span class="meal-kcal">708 kcal</span>
+                <span class="macro-chip" style="background:rgba(34,197,94,.15);color:#22c55e">P 63g</span>
+                <span class="macro-chip" style="background:rgba(245,158,11,.15);color:#f59e0b">C 45g</span>
+                <span class="macro-chip" style="background:rgba(59,130,246,.15);color:#3b82f6">F 20g</span>
+              </div>
+            </div>
+            <div class="meal-time">7:45 PM</div><div class="meal-menu">&#8942;</div>
+          </div>
+          <div class="add-meal-row" onclick="navigate('logfood')">+ Add Meal</div>
+        </div>
+
+        <!-- Log Food panel -->
+        <div class="card col" style="flex:1.4">
+          <div class="card-title">Log Food</div>
+          <div class="log-tabs"><div class="log-tab active">Search</div><div class="log-tab">&#x1F916; AI Scan</div></div>
+          <div class="search-bar">
+            <span style="color:var(--muted)">&#x1F50D;</span>
+            <input type="text" id="food-search" placeholder="Search for a food..." oninput="filterFoods()"/>
+            <button class="filter-btn">&#9881; Filter</button>
+          </div>
+          <div class="recent-label">Recent Foods <span class="see-all">See All</span></div>
+          <div id="food-list">
+            <div class="food-item"><div class="food-img" style="background:rgba(239,68,68,.12)">&#x1F357;</div><div class="food-info"><div class="food-name">Chicken Breast (Grilled)</div><div class="food-meta">100g &bull; 165 kcal</div></div><button class="add-btn" onclick="addFood('Chicken Breast (Grilled)','100g',165)">+</button></div>
+            <div class="food-item"><div class="food-img" style="background:rgba(245,158,11,.12)">&#x1F35A;</div><div class="food-info"><div class="food-name">Cooked Rice</div><div class="food-meta">100g &bull; 130 kcal</div></div><button class="add-btn" onclick="addFood('Cooked Rice','160g',195)">+</button></div>
+            <div class="food-item"><div class="food-img" style="background:rgba(59,130,246,.12)">&#x1F95B;</div><div class="food-info"><div class="food-name">Whey Protein</div><div class="food-meta">1 Scoop &bull; 120 kcal</div></div><button class="add-btn" onclick="addFood('Whey Protein','1 Scoop',120)">+</button></div>
+            <div class="food-item"><div class="food-img" style="background:rgba(234,179,8,.12)">&#x1F34C;</div><div class="food-info"><div class="food-name">Banana</div><div class="food-meta">1 Medium &bull; 105 kcal</div></div><button class="add-btn" onclick="addFood('Banana','1 Medium',105)">+</button></div>
+            <div class="food-item"><div class="food-img" style="background:rgba(239,68,68,.12)">&#x1F95A;</div><div class="food-info"><div class="food-name">Whole Eggs</div><div class="food-meta">2 Large &bull; 140 kcal</div></div><button class="add-btn" onclick="addFood('Whole Eggs','2 Large',140)">+</button></div>
+            <div class="food-item"><div class="food-img" style="background:rgba(168,85,247,.12)">&#x1F9C0;</div><div class="food-info"><div class="food-name">Paneer (High Protein)</div><div class="food-meta">100g &bull; 280 kcal</div></div><button class="add-btn" onclick="addFood('Paneer (HP)','100g',280)">+</button></div>
+          </div>
+          <div class="nutrition-summary">
+            <div class="nutr-row">
+              <div class="nutr-item"><div class="nutr-value" id="sel-cal" style="color:var(--red)">420</div><div class="nutr-label">Calories</div></div>
+              <div class="nutr-item"><div class="nutr-value" id="sel-pro" style="color:#22c55e">38g</div><div class="nutr-label">Protein</div></div>
+              <div class="nutr-item"><div class="nutr-value" id="sel-car" style="color:#f59e0b">45g</div><div class="nutr-label">Carbs</div></div>
+              <div class="nutr-item"><div class="nutr-value" id="sel-fat" style="color:#3b82f6">8g</div><div class="nutr-label">Fats</div></div>
+            </div>
+          </div>
+          <div class="recent-label">Selected Items (<span id="sel-count">2</span>) <span class="clear-btn" onclick="clearSelected()">Clear All</span></div>
+          <div class="selected-list" id="selected-list">
+            <div class="selected-item"><div class="sel-img" style="background:rgba(239,68,68,.12)">&#x1F357;</div><div class="sel-info">Chicken Breast (Grilled)<br><span style="color:var(--muted2);font-size:10px">100g</span></div><div class="sel-kcal">165 kcal</div><button class="sel-remove" onclick="removeSelected(this)">&#x2715;</button></div>
+            <div class="selected-item"><div class="sel-img" style="background:rgba(245,158,11,.12)">&#x1F35A;</div><div class="sel-info">Cooked Rice<br><span style="color:var(--muted2);font-size:10px">160g</span></div><div class="sel-kcal">195 kcal</div><button class="sel-remove" onclick="removeSelected(this)">&#x2715;</button></div>
+          </div>
+          <button class="add-meal-btn" onclick="saveDashboardMeal()">Add to Meal</button>
+        </div>
+
+        <!-- Progress overview -->
+        <div class="card col" style="flex:0.9">
+          <div class="card-title">Progress Overview</div>
+          <div class="prog-tabs">
+            <button class="prog-tab active">Overview</button>
+            <button class="prog-tab">Photos</button>
+            <button class="prog-tab">Metrics</button>
+          </div>
+          <div class="weight-chart">
+            <div class="wc-label">Weight Trend</div>
+            <div class="wc-value">80.5 kg</div>
+            <div class="wc-sub">Current Weight</div>
+            <div class="sparkline">
+              <svg viewBox="0 0 200 50" preserveAspectRatio="none">
+                <defs><linearGradient id="sg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#ff334b" stop-opacity=".3"/><stop offset="100%" stop-color="#ff334b" stop-opacity="0"/></linearGradient></defs>
+                <path d="M0,40 L40,35 L80,38 L120,28 L160,32 L200,20" stroke="#ff334b" stroke-width="2" fill="none"/>
+                <path d="M0,40 L40,35 L80,38 L120,28 L160,32 L200,20 L200,50 L0,50Z" fill="url(#sg)"/>
+                <circle cx="200" cy="20" r="3" fill="#ff334b"/>
+                <text x="0" y="48" font-size="8" fill="#64748b">1 May</text>
+                <text x="73" y="48" font-size="8" fill="#64748b">15 May</text>
+                <text x="158" y="48" font-size="8" fill="#64748b">31 May</text>
+              </svg>
+            </div>
+          </div>
+          <div class="card-title" style="margin-bottom:7px">Today's Stats <span class="see-all" onclick="navigate('progress')">See All</span></div>
+          <div class="stats-grid">
+            <div class="stat-item"><div class="stat-label">Weight</div><div class="stat-value">80.5 kg</div><div class="stat-change up">&#x2191; 1.5 kg</div></div>
+            <div class="stat-item"><div class="stat-label">Body Fat</div><div class="stat-value">14.2%</div><div class="stat-change up">&#x2191; 0.8%</div></div>
+            <div class="stat-item"><div class="stat-label">Muscle Mass</div><div class="stat-value">63.1 kg</div><div class="stat-change up">&#x2191; 1.2 kg</div></div>
+            <div class="stat-item"><div class="stat-label">Water</div><div class="stat-value">58.7%</div><div class="stat-change up">&#x2191; 1.1%</div></div>
+          </div>
+        </div>
+
+        <!-- Coach dashboard -->
+        <div class="card col" style="flex:0.9">
+          <div class="card-title">Coach Dashboard <span class="see-all" onclick="navigate('clients')">View All &#8594;</span></div>
+          <div class="coach-stat">
+            <div><div class="cs-label">Total Clients</div><div class="cs-value">24</div><div class="cs-change">&#x2191; 12% this month</div></div>
+            <div class="cs-icon">&#x1F465;</div>
+          </div>
+          <div class="coach-btns">
+            <button class="coach-btn" onclick="navigate('clients')">&#x1F464; All Clients</button>
+            <button class="coach-btn">&#x2795; Add Client</button>
+          </div>
+          <div class="card-title" style="margin-bottom:7px">Client Overview</div>
+          <div class="client-item"><div class="client-av" style="background:linear-gradient(135deg,#f59e0b,#ef4444)">RS</div><div class="client-info"><div class="client-name">Rahul Sharma</div><div class="client-prog">Progress 78%</div><div class="client-bar"><div class="client-bar-fill" style="width:78%;background:var(--green)"></div></div></div><button class="client-x">&#x2715;</button></div>
+          <div class="client-item"><div class="client-av" style="background:linear-gradient(135deg,#a855f7,#3b82f6)">PM</div><div class="client-info"><div class="client-name">Priya Mehta</div><div class="client-prog">Progress 62%</div><div class="client-bar"><div class="client-bar-fill" style="width:62%;background:#f59e0b"></div></div></div><button class="client-x">&#x2715;</button></div>
+          <div class="client-item"><div class="client-av" style="background:linear-gradient(135deg,#22c55e,#3b82f6)">AV</div><div class="client-info"><div class="client-name">Aman Verma</div><div class="client-prog">Progress 80%</div><div class="client-bar"><div class="client-bar-fill" style="width:80%;background:var(--green)"></div></div></div><button class="client-x">&#x2715;</button></div>
+          <div class="client-item"><div class="client-av" style="background:linear-gradient(135deg,#ef4444,#a855f7)">NK</div><div class="client-info"><div class="client-name">Neha Kapoor</div><div class="client-prog">Progress 55%</div><div class="client-bar"><div class="client-bar-fill" style="width:55%;background:#f59e0b"></div></div></div><button class="client-x">&#x2715;</button></div>
+          <div class="card-title" style="margin-top:10px;margin-bottom:7px">Recent Activities <span class="see-all">See All</span></div>
+          <div class="activity-item"><div class="act-av" style="background:linear-gradient(135deg,#f59e0b,#ef4444)">RS</div><div class="act-info"><div class="act-name">Rahul Sharma</div><div class="act-desc">Logged a workout</div></div><div class="act-time">2h ago</div></div>
+          <div class="activity-item"><div class="act-av" style="background:linear-gradient(135deg,#a855f7,#3b82f6)">PM</div><div class="act-info"><div class="act-name">Priya Mehta</div><div class="act-desc">Logged breakfast</div></div><div class="act-time">3h ago</div></div>
+          <div class="activity-item"><div class="act-av" style="background:linear-gradient(135deg,#22c55e,#3b82f6)">AV</div><div class="act-info"><div class="act-name">Aman Verma</div><div class="act-desc">Updated progress photos</div></div><div class="act-time">5h ago</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- NUTRITION PAGE -->
+    <div class="page" id="page-nutrition">
+      <div class="card">
+        <div class="card-title">Nutrition Database</div>
+        <div class="search-bar" style="margin-bottom:12px"><span style="color:var(--muted)">&#x1F50D;</span><input type="text" placeholder="Search foods..." style="flex:1;background:none;border:none;outline:none;color:var(--text);font-size:13px;font-family:inherit"/></div>
+        <table class="nut-table">
+          <thead><tr><th>Food</th><th>Serving</th><th>Cal</th><th>Protein</th><th>Carbs</th><th>Fat</th><th>Category</th></tr></thead>
+          <tbody>
+            <tr><td>&#x1F357; Chicken Breast (Grilled)</td><td>100g</td><td style="color:var(--red)">165</td><td style="color:#22c55e">31g</td><td style="color:#f59e0b">0g</td><td style="color:#3b82f6">3.6g</td><td><span class="macro-chip" style="background:rgba(239,68,68,.12);color:var(--red)">Protein</span></td></tr>
+            <tr><td>&#x1F35A; Cooked White Rice</td><td>100g</td><td style="color:var(--red)">130</td><td style="color:#22c55e">2.7g</td><td style="color:#f59e0b">28g</td><td style="color:#3b82f6">0.3g</td><td><span class="macro-chip" style="background:rgba(245,158,11,.12);color:#f59e0b">Carbs</span></td></tr>
+            <tr><td>&#x1F963; Oats (Dry)</td><td>100g</td><td style="color:var(--red)">389</td><td style="color:#22c55e">16.9g</td><td style="color:#f59e0b">66g</td><td style="color:#3b82f6">6.9g</td><td><span class="macro-chip" style="background:rgba(245,158,11,.12);color:#f59e0b">Carbs</span></td></tr>
+            <tr><td>&#x1F9C0; Paneer (HP Amul)</td><td>100g</td><td style="color:var(--red)">280</td><td style="color:#22c55e">25g</td><td style="color:#f59e0b">4g</td><td style="color:#3b82f6">18g</td><td><span class="macro-chip" style="background:rgba(168,85,247,.12);color:#a855f7">Dairy</span></td></tr>
+            <tr><td>&#x1F95B; Whey Protein</td><td>30g scoop</td><td style="color:var(--red)">120</td><td style="color:#22c55e">25g</td><td style="color:#f59e0b">3g</td><td style="color:#3b82f6">1.5g</td><td><span class="macro-chip" style="background:rgba(59,130,246,.12);color:#3b82f6">Supplement</span></td></tr>
+            <tr><td>&#x1F95A; Whole Egg</td><td>50g (1 large)</td><td style="color:var(--red)">70</td><td style="color:#22c55e">6g</td><td style="color:#f59e0b">0.6g</td><td style="color:#3b82f6">5g</td><td><span class="macro-chip" style="background:rgba(239,68,68,.12);color:var(--red)">Protein</span></td></tr>
+            <tr><td>&#x1F34C; Banana</td><td>120g (1 medium)</td><td style="color:var(--red)">105</td><td style="color:#22c55e">1.3g</td><td style="color:#f59e0b">27g</td><td style="color:#3b82f6">0.4g</td><td><span class="macro-chip" style="background:rgba(34,197,94,.12);color:#22c55e">Fruit</span></td></tr>
+            <tr><td>&#x1F9C7; Roti / Chapati</td><td>40g (1 piece)</td><td style="color:var(--red)">85</td><td style="color:#22c55e">3g</td><td style="color:#f59e0b">18g</td><td style="color:#3b82f6">0.5g</td><td><span class="macro-chip" style="background:rgba(245,158,11,.12);color:#f59e0b">Carbs</span></td></tr>
+            <tr><td>&#x1F9C8; Ghee</td><td>5g (1 tsp)</td><td style="color:var(--red)">45</td><td style="color:#22c55e">0g</td><td style="color:#f59e0b">0g</td><td style="color:#3b82f6">5g</td><td><span class="macro-chip" style="background:rgba(59,130,246,.12);color:#3b82f6">Fat</span></td></tr>
+            <tr><td>&#x1F95C; Peanut Butter</td><td>30g (2 tbsp)</td><td style="color:var(--red)">190</td><td style="color:#22c55e">8g</td><td style="color:#f59e0b">6g</td><td style="color:#3b82f6">16g</td><td><span class="macro-chip" style="background:rgba(59,130,246,.12);color:#3b82f6">Fat</span></td></tr>
+            <tr><td>&#x1FAD9; Dal (Cooked)</td><td>180g (1 katori)</td><td style="color:var(--red)">150</td><td style="color:#22c55e">7g</td><td style="color:#f59e0b">22g</td><td style="color:#3b82f6">4g</td><td><span class="macro-chip" style="background:rgba(239,68,68,.12);color:var(--red)">Protein</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- LOG FOOD PAGE -->
+    <div class="page" id="page-logfood">
+      <div class="row">
+        <div class="card" style="flex:1.5">
+          <div class="card-title">Log Food</div>
+          <div style="margin-bottom:9px"><label style="font-size:12px;color:var(--muted2);display:block;margin-bottom:5px">Meal Type</label>
+            <div style="display:flex;gap:6px;flex-wrap:wrap">
+              <button class="prog-tab active" onclick="selectMeal(this,'Breakfast')">&#x1F305; Breakfast</button>
+              <button class="prog-tab" onclick="selectMeal(this,'Lunch')">&#x2600;&#xFE0F; Lunch</button>
+              <button class="prog-tab" onclick="selectMeal(this,'Dinner')">&#x1F319; Dinner</button>
+              <button class="prog-tab" onclick="selectMeal(this,'Snack')">&#x1F34E; Snack</button>
+            </div>
+          </div>
+          <div class="search-bar"><span style="color:var(--muted)">&#x1F50D;</span><input type="text" placeholder="Search for a food..." oninput="filterFoods2(this.value)"/></div>
+          <div id="food-list-2">
+            <div class="food-item"><div class="food-img" style="background:rgba(239,68,68,.12)">&#x1F357;</div><div class="food-info"><div class="food-name">Chicken Breast (Grilled)</div><div class="food-meta">100g &bull; 165 kcal &bull; P 31g C 0g F 3.6g</div></div><button class="add-btn" onclick="addFood2('Chicken Breast','100g',165,31,0,3.6)">+</button></div>
+            <div class="food-item"><div class="food-img" style="background:rgba(245,158,11,.12)">&#x1F35A;</div><div class="food-info"><div class="food-name">Cooked Rice</div><div class="food-meta">100g &bull; 130 kcal &bull; P 2.7g C 28g F 0.3g</div></div><button class="add-btn" onclick="addFood2('Cooked Rice','100g',130,2.7,28,0.3)">+</button></div>
+            <div class="food-item"><div class="food-img" style="background:rgba(34,197,94,.12)">&#x1F963;</div><div class="food-info"><div class="food-name">Oats (Dry)</div><div class="food-meta">80g &bull; 311 kcal &bull; P 13g C 53g F 5.5g</div></div><button class="add-btn" onclick="addFood2('Oats','80g',311,13,53,5.5)">+</button></div>
+            <div class="food-item"><div class="food-img" style="background:rgba(168,85,247,.12)">&#x1F9C0;</div><div class="food-info"><div class="food-name">Paneer (High Protein)</div><div class="food-meta">100g &bull; 280 kcal &bull; P 25g C 4g F 18g</div></div><button class="add-btn" onclick="addFood2('Paneer (HP)','100g',280,25,4,18)">+</button></div>
+            <div class="food-item"><div class="food-img" style="background:rgba(59,130,246,.12)">&#x1F95B;</div><div class="food-info"><div class="food-name">Whey Protein</div><div class="food-meta">1 Scoop &bull; 120 kcal &bull; P 25g C 3g F 1.5g</div></div><button class="add-btn" onclick="addFood2('Whey Protein','1 Scoop',120,25,3,1.5)">+</button></div>
+            <div class="food-item"><div class="food-img" style="background:rgba(234,179,8,.12)">&#x1F34C;</div><div class="food-info"><div class="food-name">Banana</div><div class="food-meta">1 Medium &bull; 105 kcal &bull; P 1.3g C 27g F 0.4g</div></div><button class="add-btn" onclick="addFood2('Banana','1 Medium',105,1.3,27,0.4)">+</button></div>
+            <div class="food-item"><div class="food-img" style="background:rgba(239,68,68,.12)">&#x1F95A;</div><div class="food-info"><div class="food-name">Whole Eggs</div><div class="food-meta">2 Large &bull; 140 kcal &bull; P 12g C 1.2g F 10g</div></div><button class="add-btn" onclick="addFood2('Whole Eggs','2 Large',140,12,1.2,10)">+</button></div>
+            <div class="food-item"><div class="food-img" style="background:rgba(245,158,11,.12)">&#x1F9C7;</div><div class="food-info"><div class="food-name">Roti / Chapati</div><div class="food-meta">40g (1 pc) &bull; 85 kcal &bull; P 3g C 18g F 0.5g</div></div><button class="add-btn" onclick="addFood2('Roti','40g',85,3,18,0.5)">+</button></div>
+            <div class="food-item"><div class="food-img" style="background:rgba(168,85,247,.12)">&#x1FAD9;</div><div class="food-info"><div class="food-name">Dal (Cooked)</div><div class="food-meta">180g &bull; 150 kcal &bull; P 7g C 22g F 4g</div></div><button class="add-btn" onclick="addFood2('Dal (Cooked)','180g',150,7,22,4)">+</button></div>
+          </div>
+        </div>
+        <div class="card col" style="flex:0.8">
+          <div class="card-title">Meal Queue <span id="queue-meal-type" style="color:var(--red);font-size:11px">&#8212; Breakfast</span></div>
+          <div id="queue-list" style="margin-bottom:9px;min-height:55px"><div style="color:var(--muted);font-size:12px;text-align:center;padding:16px">Add foods from the left</div></div>
+          <div class="nutrition-summary">
+            <div class="nutr-row">
+              <div class="nutr-item"><div class="nutr-value" style="color:var(--red)" id="q-cal">0</div><div class="nutr-label">kcal</div></div>
+              <div class="nutr-item"><div class="nutr-value" style="color:#22c55e" id="q-pro">0g</div><div class="nutr-label">Protein</div></div>
+              <div class="nutr-item"><div class="nutr-value" style="color:#f59e0b" id="q-car">0g</div><div class="nutr-label">Carbs</div></div>
+              <div class="nutr-item"><div class="nutr-value" style="color:#3b82f6" id="q-fat">0g</div><div class="nutr-label">Fats</div></div>
+            </div>
+          </div>
+          <button class="add-meal-btn" onclick="saveMeal()">&#x1F4BE; Save Meal</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- WORKOUTS PAGE -->
+    <div class="page" id="page-workouts">
+      <div class="row">
+        <div class="card" style="flex:1.5">
+          <div class="card-title">Log Workout</div>
+          <div style="margin-bottom:10px;display:flex;gap:10px;align-items:center">
+            <label style="font-size:12px;color:var(--muted2)">Date:</label>
+            <input type="date" id="workout-date" class="inp"/>
+          </div>
+          <div id="exercises-container"></div>
+          <button class="save-workout" onclick="saveWorkoutFromUI()">💾 Save Workout</button>
+        </div>
+        <div class="card" style="flex:0.8">
+          <div class="card-title">Workout History</div>
+          <div class="workout-card">
+            <div class="workout-header"><div><div class="workout-name">Push Day A</div><div class="workout-date">17 Jul 2026</div></div><span style="font-size:11px;color:var(--green)">&#x2713; Completed</span></div>
+            <div class="exercise-row"><div class="ex-name">Bench Press (Barbell)</div><div class="ex-sets">4 &times; 8 &bull; 80kg</div></div>
+            <div class="exercise-row"><div class="ex-name">Incline DB Press</div><div class="ex-sets">3 &times; 10 &bull; 24kg</div></div>
+            <div class="exercise-row"><div class="ex-name">Shoulder Press</div><div class="ex-sets">3 &times; 12 &bull; 20kg</div></div>
+          </div>
+          <div class="workout-card">
+            <div class="workout-header"><div><div class="workout-name">Pull Day A</div><div class="workout-date">15 Jul 2026</div></div><span style="font-size:11px;color:var(--green)">&#x2713; Completed</span></div>
+            <div class="exercise-row"><div class="ex-name">Deadlift</div><div class="ex-sets">4 &times; 5 &bull; 120kg</div></div>
+            <div class="exercise-row"><div class="ex-name">Barbell Row</div><div class="ex-sets">4 &times; 8 &bull; 70kg</div></div>
+            <div class="exercise-row"><div class="ex-name">Pull-ups</div><div class="ex-sets">3 &times; 10 &bull; BW</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PROGRESS PAGE -->
+    <div class="page" id="page-progress">
+      <div class="row">
+        <div class="card" style="flex:1.5">
+          <div class="card-title">Log Today's Metrics</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:11px">
+            <div><label style="font-size:11px;color:var(--muted2)">Body Weight (kg)</label><input id="prog-weight" class="inp" style="width:100%;margin-top:4px" type="number" step="0.1" value="80.5"/></div>
+            <div><label style="font-size:11px;color:var(--muted2)">Body Fat %</label><input id="prog-fat" class="inp" style="width:100%;margin-top:4px" type="number" step="0.1" value="14.2"/></div>
+            <div><label style="font-size:11px;color:var(--muted2)">Waist (cm)</label><input id="prog-waist" class="inp" style="width:100%;margin-top:4px" type="number" step="0.1" value="80"/></div>
+            <div><label style="font-size:11px;color:var(--muted2)">Muscle Mass (kg)</label><input id="prog-muscle" class="inp" style="width:100%;margin-top:4px" type="number" step="0.1" value="63.1"/></div>
+          </div>
+          <button class="add-meal-btn" onclick="saveProgressFromUI()">💾 Save Progress</button>
+          <div class="card-title" style="margin-top:13px">Weight Trend (Last 6 Months)</div>
+          <div class="progress-chart-area">
+            <div class="chart-container">
+              <svg viewBox="0 0 500 160" preserveAspectRatio="none">
+                <defs><linearGradient id="cg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#ff334b" stop-opacity=".3"/><stop offset="100%" stop-color="#ff334b" stop-opacity="0"/></linearGradient></defs>
+                <line x1="0" y1="40" x2="500" y2="40" stroke="#24242c" stroke-width="1"/>
+                <line x1="0" y1="80" x2="500" y2="80" stroke="#24242c" stroke-width="1"/>
+                <line x1="0" y1="120" x2="500" y2="120" stroke="#24242c" stroke-width="1"/>
+                <path d="M0,100 L80,90 L160,110 L240,80 L320,70 L400,60 L480,55" stroke="#ff334b" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M0,100 L80,90 L160,110 L240,80 L320,70 L400,60 L480,55 L480,160 L0,160Z" fill="url(#cg)"/>
+                <circle cx="0" cy="100" r="4" fill="#ff334b" stroke="#111116" stroke-width="2"/><circle cx="80" cy="90" r="4" fill="#ff334b" stroke="#111116" stroke-width="2"/><circle cx="160" cy="110" r="4" fill="#ff334b" stroke="#111116" stroke-width="2"/><circle cx="240" cy="80" r="4" fill="#ff334b" stroke="#111116" stroke-width="2"/><circle cx="320" cy="70" r="4" fill="#ff334b" stroke="#111116" stroke-width="2"/><circle cx="400" cy="60" r="4" fill="#ff334b" stroke="#111116" stroke-width="2"/><circle cx="480" cy="55" r="4" fill="#ff334b" stroke="#111116" stroke-width="2"/>
+                <text x="0" y="155" font-size="10" fill="#64748b">Feb</text><text x="75" y="155" font-size="10" fill="#64748b">Mar</text><text x="155" y="155" font-size="10" fill="#64748b">Apr</text><text x="235" y="155" font-size="10" fill="#64748b">May</text><text x="315" y="155" font-size="10" fill="#64748b">Jun</text><text x="395" y="155" font-size="10" fill="#64748b">Jul</text>
+              </svg>
+            </div>
+          </div>
+        </div>
+        <div class="card" style="flex:0.8">
+          <div class="card-title">Stats Overview</div>
+          <div style="display:grid;grid-template-columns:1fr;gap:8px">
+            <div class="stat-item" style="display:flex;align-items:center;justify-content:space-between"><div><div class="stat-label">Starting Weight</div><div class="stat-value">87.5 kg</div></div><span style="font-size:18px">&#x2696;&#xFE0F;</span></div>
+            <div class="stat-item" style="display:flex;align-items:center;justify-content:space-between"><div><div class="stat-label">Current Weight</div><div class="stat-value" style="color:var(--green)">80.5 kg</div></div><span style="font-size:18px">&#x1F4C9;</span></div>
+            <div class="stat-item" style="display:flex;align-items:center;justify-content:space-between"><div><div class="stat-label">Total Lost</div><div class="stat-value" style="color:var(--red)">7.0 kg</div></div><span style="font-size:18px">&#x1F525;</span></div>
+            <div class="stat-item" style="display:flex;align-items:center;justify-content:space-between"><div><div class="stat-label">Muscle Gain</div><div class="stat-value" style="color:#3b82f6">+3.2 kg</div></div><span style="font-size:18px">&#x1F4AA;</span></div>
+            <div class="stat-item" style="display:flex;align-items:center;justify-content:space-between"><div><div class="stat-label">Workouts Logged</div><div class="stat-value">48</div></div><span style="font-size:18px">&#x1F3CB;&#xFE0F;</span></div>
+            <div class="stat-item" style="display:flex;align-items:center;justify-content:space-between"><div><div class="stat-label">Current Streak</div><div class="stat-value" style="color:#f59e0b">12 days &#x1F525;</div></div><span style="font-size:18px">&#x1F4C5;</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- FEEDBACK PAGE -->
+    <div class="page" id="page-feedback">
+      <div class="row">
+        <div class="card" style="flex:1">
+          <div class="card-title">Coach Feedback</div>
+          <div class="feedback-item"><div class="fb-header"><div class="fb-av" style="background:linear-gradient(135deg,#f59e0b,#ef4444)">CA</div><div class="fb-name">Coach Abhishek</div><div class="fb-time">Today, 9:00 AM</div></div><div class="fb-text">Great work this week! Your protein intake has been consistently above 130g which is exactly what we need. Keep the lunch meals clean &mdash; the salad addition is making a huge difference. &#x1F4AA;</div></div>
+          <div class="feedback-item"><div class="fb-header"><div class="fb-av" style="background:linear-gradient(135deg,#f59e0b,#ef4444)">CA</div><div class="fb-name">Coach Abhishek</div><div class="fb-time">Yesterday, 6:30 PM</div></div><div class="fb-text">I noticed you skipped your post-workout meal on Tuesday. Recovery window is critical &mdash; get at least 30g protein within 45 minutes after training. Keep a shaker with whey ready!</div></div>
+          <div class="feedback-item"><div class="fb-header"><div class="fb-av" style="background:linear-gradient(135deg,#f59e0b,#ef4444)">CA</div><div class="fb-name">Coach Abhishek</div><div class="fb-time">2 days ago</div></div><div class="fb-text">Your body fat dropped from 15.0% to 14.2% this month. Excellent rate of fat loss while preserving muscle. The calorie target is working perfectly &mdash; stay the course!</div></div>
+        </div>
+        <div class="card" style="flex:0.7">
+          <div class="card-title">Your Goals</div>
+          <div class="stat-item" style="border-radius:8px;padding:10px;background:var(--bg3);margin-bottom:7px"><div class="stat-label">Primary Goal</div><div class="stat-value" style="font-size:13px;margin-top:3px">&#x1F3AF; Fat Loss + Muscle Retention</div></div>
+          <div class="stat-item" style="border-radius:8px;padding:10px;background:var(--bg3);margin-bottom:7px"><div class="stat-label">Target Weight</div><div class="stat-value" style="color:var(--green)">75.0 kg</div><div class="stat-change" style="color:var(--muted2)">5.5 kg to go</div></div>
+          <div class="stat-item" style="border-radius:8px;padding:10px;background:var(--bg3);margin-bottom:7px"><div class="stat-label">Daily Calories</div><div class="stat-value">2,300 kcal</div></div>
+          <div class="stat-item" style="border-radius:8px;padding:10px;background:var(--bg3)"><div class="stat-label">Macros Split</div><div style="margin-top:6px;display:flex;flex-direction:column;gap:4px"><div style="display:flex;justify-content:space-between;font-size:12px"><span style="color:#22c55e">Protein</span><span>150g (26%)</span></div><div style="display:flex;justify-content:space-between;font-size:12px"><span style="color:#f59e0b">Carbs</span><span>220g (38%)</span></div><div style="display:flex;justify-content:space-between;font-size:12px"><span style="color:#3b82f6">Fats</span><span>70g (36%)</span></div></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- COACHING PAGE -->
+    <div class="page" id="page-coaching">
+      <div class="card">
+        <div class="card-title">Coaching Overview <span class="see-all" onclick="navigate('clients')">View All Clients &#8594;</span></div>
+        <div class="row" style="margin-bottom:11px">
+          <div class="coach-stat" style="flex:1"><div><div class="cs-label">Total Clients</div><div class="cs-value">24</div><div class="cs-change">&#x2191; 12% this month</div></div><div class="cs-icon">&#x1F465;</div></div>
+          <div class="coach-stat" style="flex:1"><div><div class="cs-label">Active Plans</div><div class="cs-value">18</div><div class="cs-change">&#x2191; 3 new this week</div></div><div class="cs-icon">&#x1F4CB;</div></div>
+          <div class="coach-stat" style="flex:1"><div><div class="cs-label">Avg Progress</div><div class="cs-value">71%</div><div class="cs-change">&#x2191; 5% vs last month</div></div><div class="cs-icon">&#x1F4C8;</div></div>
+        </div>
+        <table class="nut-table">
+          <thead><tr><th>Client</th><th>Goal</th><th>Progress</th><th>Last Active</th><th>Status</th></tr></thead>
+          <tbody>
+            <tr><td><div style="display:flex;align-items:center;gap:7px"><div class="client-av" style="background:linear-gradient(135deg,#f59e0b,#ef4444);width:24px;height:24px;font-size:9px">RS</div>Rahul Sharma</div></td><td>Fat Loss</td><td><div style="display:flex;align-items:center;gap:5px"><div class="client-bar" style="width:65px"><div class="client-bar-fill" style="width:78%;background:var(--green)"></div></div>78%</div></td><td>2h ago</td><td><span class="macro-chip" style="background:rgba(34,197,94,.12);color:#22c55e">Active</span></td></tr>
+            <tr><td><div style="display:flex;align-items:center;gap:7px"><div class="client-av" style="background:linear-gradient(135deg,#a855f7,#3b82f6);width:24px;height:24px;font-size:9px">PM</div>Priya Mehta</div></td><td>Muscle Gain</td><td><div style="display:flex;align-items:center;gap:5px"><div class="client-bar" style="width:65px"><div class="client-bar-fill" style="width:62%;background:#f59e0b"></div></div>62%</div></td><td>3h ago</td><td><span class="macro-chip" style="background:rgba(34,197,94,.12);color:#22c55e">Active</span></td></tr>
+            <tr><td><div style="display:flex;align-items:center;gap:7px"><div class="client-av" style="background:linear-gradient(135deg,#22c55e,#3b82f6);width:24px;height:24px;font-size:9px">AV</div>Aman Verma</div></td><td>Body Recomp</td><td><div style="display:flex;align-items:center;gap:5px"><div class="client-bar" style="width:65px"><div class="client-bar-fill" style="width:80%;background:var(--green)"></div></div>80%</div></td><td>5h ago</td><td><span class="macro-chip" style="background:rgba(34,197,94,.12);color:#22c55e">Active</span></td></tr>
+            <tr><td><div style="display:flex;align-items:center;gap:7px"><div class="client-av" style="background:linear-gradient(135deg,#ef4444,#a855f7);width:24px;height:24px;font-size:9px">NK</div>Neha Kapoor</div></td><td>Fat Loss</td><td><div style="display:flex;align-items:center;gap:5px"><div class="client-bar" style="width:65px"><div class="client-bar-fill" style="width:55%;background:#f59e0b"></div></div>55%</div></td><td>1d ago</td><td><span class="macro-chip" style="background:rgba(245,158,11,.12);color:#f59e0b">Moderate</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- CLIENTS PAGE -->
+    <div class="page" id="page-clients">
+      <div class="card">
+        <div class="card-title">All Clients <button class="btn-red" style="font-size:11px">&#x2795; Add Client</button></div>
+        <div id="clients-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px"></div>
+      </div>
+    </div>
+
+    <!-- CALENDAR PAGE -->
+    <div class="page" id="page-calendar">
+      <div class="card">
+        <div class="card-title">Calendar</div>
+        <div id="cal-grid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:7px"></div>
+        <div style="margin-top:11px"><div class="card-title">Upcoming</div>
+          <div class="activity-item"><div class="act-av" style="background:var(--red)">&#x1F4CB;</div><div class="act-info"><div class="act-name">Check-in with Rahul</div><div class="act-desc">Today, 4:00 PM</div></div></div>
+          <div class="activity-item"><div class="act-av" style="background:#3b82f6">&#x1F4AA;</div><div class="act-info"><div class="act-name">Push Day Workout</div><div class="act-desc">Tomorrow, 7:00 AM</div></div></div>
+          <div class="activity-item"><div class="act-av" style="background:#22c55e">&#x1F4CA;</div><div class="act-info"><div class="act-name">Monthly Progress Review</div><div class="act-desc">23 Jul, 2:00 PM</div></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MESSAGES PAGE -->
+    <div class="page" id="page-messages">
+      <div class="card">
+        <div class="card-title">Messages</div>
+        <div id="messages-list" style="max-height:500px;overflow-y:auto"></div>
+      </div>
+    </div>
+
+    <!-- SETTINGS PAGE -->
+    <div class="page" id="page-settings">
+      <div class="row">
+        <div class="col" style="flex:1.2">
+          <div class="settings-section">
+            <h3>&#x1F464; Profile</h3>
+            <div class="setting-row"><div><div class="setting-label">Full Name</div></div><input class="inp" value="Abhishek"/></div>
+            <div class="setting-row"><div><div class="setting-label">Role</div></div><span style="color:var(--red);font-size:12px;font-weight:600">Coach</span></div>
+            <div class="setting-row"><div><div class="setting-label">Email</div></div><input class="inp" value="coach@ryvom.app"/></div>
+            <div class="setting-row"><div><div class="setting-label">Target Calories</div></div><input class="inp" type="number" value="2300"/></div>
+          </div>
+          <div class="settings-section">
+            <h3>&#x1F3AF; Nutrition Targets</h3>
+            <div class="setting-row"><div><div class="setting-label">Protein (g)</div></div><input class="inp" type="number" value="150"/></div>
+            <div class="setting-row"><div><div class="setting-label">Carbs (g)</div></div><input class="inp" type="number" value="220"/></div>
+            <div class="setting-row"><div><div class="setting-label">Fats (g)</div></div><input class="inp" type="number" value="70"/></div>
+            <div class="setting-row"><div><div class="setting-label">Water (litres)</div></div><input class="inp" type="number" value="3.5"/></div>
+          </div>
+        </div>
+        <div class="col" style="flex:1">
+          <div class="settings-section">
+            <h3>&#x1F514; Notifications</h3>
+            <div class="setting-row"><div><div class="setting-label">Meal Reminders</div><div class="setting-sub">Get notified to log meals</div></div><div class="toggle on" onclick="this.classList.toggle('on')"></div></div>
+            <div class="setting-row"><div><div class="setting-label">Workout Alerts</div><div class="setting-sub">Daily workout reminders</div></div><div class="toggle on" onclick="this.classList.toggle('on')"></div></div>
+            <div class="setting-row"><div><div class="setting-label">Client Updates</div><div class="setting-sub">When clients log activity</div></div><div class="toggle" onclick="this.classList.toggle('on')"></div></div>
+            <div class="setting-row"><div><div class="setting-label">Progress Reports</div><div class="setting-sub">Weekly summary</div></div><div class="toggle on" onclick="this.classList.toggle('on')"></div></div>
+          </div>
+          <div class="settings-section">
+            <h3>&#x1F512; Security</h3>
+            <div class="setting-row"><div><div class="setting-label">Change Password</div></div><button class="btn-outline">Update</button></div>
+            <div class="setting-row"><div><div class="setting-label">Two-Factor Auth</div></div><div class="toggle" onclick="this.classList.toggle('on')"></div></div>
+            <div class="setting-row"><div><div class="setting-label">Data Export</div></div><button class="btn-outline">Export CSV</button></div>
+          </div>
+          <div style="display:flex;gap:8px"><button class="btn-red" onclick="alert('Settings saved!')">Save Changes</button><button class="btn-outline">Reset</button></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+</div>
+
+<script>
+window.onerror = function(message, source, lineno, colno, error) {
+  var errDiv = document.createElement('div');
+  errDiv.style.cssText = 'position:fixed;top:10px;left:10px;right:10px;background:#ff334b;color:#fff;padding:15px;z-index:99999;border-radius:8px;font-size:12px;font-family:monospace;box-shadow:0 10px 30px rgba(0,0,0,0.5);text-align:left;';
+  errDiv.innerHTML = '<b>JS ERROR:</b> ' + message + '<br>at ' + source + ':' + lineno + ':' + colno + (error && error.stack ? '<br><pre style="margin-top:10px;overflow-x:auto;">' + error.stack + '</pre>' : '');
+  document.body.appendChild(errDiv);
+  return false;
+};
+
+// Date formatting
+var days=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+var months=['January','February','March','April','May','June','July','August','September','October','November','December'];
+var now=new Date();
+document.getElementById('topbar-date').textContent=days[now.getDay()]+', '+now.getDate()+' '+months[now.getMonth()]+' '+now.getFullYear();
+var wdEl=document.getElementById('workout-date');
+if(wdEl) wdEl.value=now.toISOString().split('T')[0];
+
+// Navigation
+function navigate(page){
+  document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active');});
+  var el=document.getElementById('page-'+page);
+  if(el) el.classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(function(n){n.classList.remove('active');});
+  var map={dashboard:0,nutrition:1,logfood:2,workouts:3,progress:4,feedback:5,coaching:6,clients:7,calendar:8,messages:9,settings:10};
+  var idx=map[page];
+  if(idx!==undefined){var items=document.querySelectorAll('.nav-item');if(items[idx])items[idx].classList.add('active');}
+  sessionStorage.setItem('active_view', page);
+}
+
+// Check saved view
+var savedView = sessionStorage.getItem('active_view') || 'dashboard';
+navigate(savedView);
+
+// Communication helper
+function submitAction(action, data) {
+  var params = new URLSearchParams();
+  params.set('action', action);
+  params.set('data', JSON.stringify(data));
+  params.set('view', sessionStorage.getItem('active_view') || 'dashboard');
+  
+  var link = document.createElement('a');
+  link.href = '/?' + params.toString();
+  link.target = '_top';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+// Dashboard selected items
+var selectedDashboardItems = [];
+var selCal = 0, selCount = 0;
+var selPro = 0, selCar = 0, selFat = 0;
+
+function updateSel() {
+  document.getElementById('sel-cal').textContent = selCal;
+  document.getElementById('sel-count').textContent = selCount;
+  document.getElementById('sel-pro').textContent = selPro + 'g';
+  document.getElementById('sel-car').textContent = selCar + 'g';
+  document.getElementById('sel-fat').textContent = selFat + 'g';
+}
+
+function addFood(id, name, qty, cal, pro, car, fat) {
+  selectedDashboardItems.push({ food_id: id, name: name, qty: qty, cal: cal, protein: pro, carbs: car, fat: fat });
+  selCal += cal;
+  selPro += pro;
+  selCar += car;
+  selFat += fat;
+  selCount++;
+  updateSel();
+  
+  var list = document.getElementById('selected-list');
+  var d = document.createElement('div');
+  d.className = 'selected-item';
+  d.innerHTML = '<div class="sel-img" style="background:rgba(255,51,75,.12)">🍽️</div><div class="sel-info">' + name + '<br><span style="color:var(--muted2);font-size:10px">' + qty + '</span></div><div class="sel-kcal">' + cal + ' kcal</div><button class="sel-remove" onclick="removeSelected(this, ' + (selectedDashboardItems.length - 1) + ')">✕</button>';
+  list.appendChild(d);
+}
+
+function removeSelected(btn, idx) {
+  var item = selectedDashboardItems[idx];
+  if (item) {
+    selCal = Math.max(0, selCal - item.cal);
+    selPro = Math.max(0, selPro - item.protein);
+    selCar = Math.max(0, selCar - item.carbs);
+    selFat = Math.max(0, selFat - item.fat);
+    selCount = Math.max(0, selCount - 1);
+    updateSel();
+    selectedDashboardItems[idx] = null; // Mark deleted
+  }
+  btn.closest('.selected-item').remove();
+}
+
+function clearSelected() {
+  selectedDashboardItems = [];
+  selCal = 0; selPro = 0; selCar = 0; selFat = 0; selCount = 0;
+  updateSel();
+  document.getElementById('selected-list').innerHTML = '';
+}
+
+function filterFoods() {
+  var q = document.getElementById('food-search').value.toLowerCase();
+  var list = document.getElementById('food-list');
+  var html = '';
+  var icons = ['🍎', '🍗', '🍞', '🥛', '🥩', '🥚', '🍌'];
+  var filtered = (window.foodDatabase || []).filter(function(food) {
+    return food.name.toLowerCase().includes(q);
+  });
+  
+  filtered.forEach(function(food, idx) {
+    var icon = icons[idx % icons.length];
+    var meta = food.serving_g + 'g • ' + food.calories + ' kcal';
+    html += '<div class="food-item"><div class="food-img" style="background:rgba(255,51,75,.12)">' + icon + '</div><div class="food-info"><div class="food-name">' + food.name + '</div><div class="food-meta">' + meta + '</div></div><button class="add-btn" onclick="addFood(\'' + food.id + '\',\'' + food.name.replace(/'/g, "\\'") + '\',\'' + food.serving_g + 'g\',' + food.calories + ',' + food.protein + ',' + food.carbs + ',' + food.fat + ')">+</button></div>';
+  });
+  
+  if (list) list.innerHTML = html;
+}
+
+function saveDashboardMeal() {
+  var validItems = selectedDashboardItems.filter(Boolean);
+  if (!validItems.length) { alert('Add at least one food first.'); return; }
+  submitAction('add_meal', {
+    meal_type: 'Snack',
+    items: validItems
+  });
+}
+
+// Log Food Page logic
+var queueItems = [];
+var currentMeal = 'Breakfast';
+
+function selectMeal(btn, meal) {
+  document.querySelectorAll('#page-logfood .prog-tab').forEach(function(b) { b.classList.remove('active'); });
+  btn.classList.add('active');
+  currentMeal = meal;
+  document.getElementById('queue-meal-type').textContent = '— ' + meal;
+}
+
+function addFood2(id, name, qty, cal, pro, car, fat) {
+  queueItems.push({ food_id: id, name: name, qty: qty, cal: cal, protein: pro, carbs: car, fat: fat });
+  renderQueue();
+}
+
+function renderQueue() {
+  var list = document.getElementById('queue-list');
+  if (!queueItems.length) {
+    list.innerHTML = '<div style="color:var(--muted);font-size:12px;text-align:center;padding:16px">Add foods from the left</div>';
+    updateQSummary();
+    return;
+  }
+  list.innerHTML = queueItems.map(function(item, i) {
+    if (!item) return '';
+    return '<div class="selected-item"><div class="sel-img" style="background:rgba(255,51,75,.12)">🍽️</div><div class="sel-info">' + item.name + '<br><span style="color:var(--muted2);font-size:10px">' + item.qty + '</span></div><div class="sel-kcal">' + item.cal + ' kcal</div><button class="sel-remove" onclick="removeQueueItem(' + i + ')">✕</button></div>';
+  }).join('');
+  updateQSummary();
+}
+
+function removeQueueItem(i) {
+  queueItems[i] = null;
+  renderQueue();
+}
+
+function updateQSummary() {
+  var c = 0, p = 0, cr = 0, f = 0;
+  queueItems.forEach(function(item) {
+    if (item) {
+      c += item.cal;
+      p += item.protein;
+      cr += item.carbs;
+      f += item.fat;
+    }
+  });
+  document.getElementById('q-cal').textContent = c;
+  document.getElementById('q-pro').textContent = p.toFixed(1) + 'g';
+  document.getElementById('q-car').textContent = cr.toFixed(1) + 'g';
+  document.getElementById('q-fat').textContent = f.toFixed(1) + 'g';
+}
+
+function saveMeal() {
+  var validItems = queueItems.filter(Boolean);
+  if (!validItems.length) { alert('Add at least one food first.'); return; }
+  submitAction('add_meal', {
+    meal_type: currentMeal,
+    items: validItems
+  });
+}
+
+function filterFoods2(q) {
+  var list = document.getElementById('food-list-2');
+  var html = '';
+  var icons = ['🍎', '🍗', '🍞', '🥛', '🥩', '🥚', '🍌'];
+  var filtered = (window.foodDatabase || []).filter(function(food) {
+    return food.name.toLowerCase().includes(q.toLowerCase());
+  });
+  
+  filtered.forEach(function(food, idx) {
+    var icon = icons[idx % icons.length];
+    var meta2 = food.serving_g + 'g • ' + food.calories + ' kcal • P ' + food.protein + 'g C ' + food.carbs + 'g F ' + food.fat + 'g';
+    html += '<div class="food-item"><div class="food-img" style="background:rgba(255,51,75,.12)">' + icon + '</div><div class="food-info"><div class="food-name">' + food.name + '</div><div class="food-meta">' + meta2 + '</div></div><button class="add-btn" onclick="addFood2(\'' + food.id + '\',\'' + food.name.replace(/'/g, "\\'") + '\',\'' + food.serving_g + 'g\',' + food.calories + ',' + food.protein + ',' + food.carbs + ',' + food.fat + ')">+</button></div>';
+  });
+  
+  if (list) list.innerHTML = html;
+}
+
+// Workouts logic
+function buildExercises() {
+  var cont = document.getElementById('exercises-container');
+  if (!cont) return;
+  var exs = ['Bench Press (Barbell)', 'Incline Dumbbell Press', 'Shoulder Press (Dumbbell)'];
+  cont.innerHTML = exs.map(function(ex) {
+    return '<div class="workout-card"><div class="workout-header"><div class="workout-name">' + ex + '</div></div>' +
+    '<div class="sets-row hdr"><div>Set</div><div>Weight (kg)</div><div>Reps</div><div>RPE</div><div>Done</div></div>' +
+    [1, 2, 3, 4].map(function(s) {
+      return '<div class="sets-row"><div class="set-no">' + s + '</div><input type="number" placeholder="0" min="0" step="0.5"/><input type="number" placeholder="0" min="0"/><input type="number" placeholder="8" min="1" max="10" step="0.5"/><input type="checkbox" style="width:14px;height:14px;accent-color:var(--red)"/></div>';
+    }).join('') + '</div>';
+  }).join('');
+}
+buildExercises();
+
+function saveWorkoutFromUI() {
+  var date = document.getElementById('workout-date').value;
+  var cards = document.querySelectorAll('.workout-card');
+  var workouts = [];
+  cards.forEach(function(card) {
+    var exName = card.querySelector('.workout-name').textContent;
+    var rows = card.querySelectorAll('.sets-row:not(.hdr)');
+    rows.forEach(function(row) {
+      var setNo = parseInt(row.querySelector('.set-no').textContent);
+      var weight = parseFloat(row.querySelectorAll('input')[0].value || 0);
+      var reps = parseInt(row.querySelectorAll('input')[1].value || 0);
+      var rpe = parseFloat(row.querySelectorAll('input')[2].value || 8);
+      var done = row.querySelectorAll('input')[3].checked;
+      if (done && (reps > 0 || weight > 0)) {
+        workouts.push({
+          exercise: exName,
+          set_no: setNo,
+          weight: weight,
+          reps: reps,
+          rpe: rpe
+        });
+      }
+    });
+  });
+  
+  if (!workouts.length) { alert('No completed exercises logged.'); return; }
+  submitAction('save_workout', {
+    date: date,
+    sets: workouts
+  });
+}
+
+// Progress logic
+function saveProgressFromUI() {
+  var w = parseFloat(document.getElementById('prog-weight').value || 0);
+  var f = parseFloat(document.getElementById('prog-fat').value || 0);
+  var waist = parseFloat(document.getElementById('prog-waist').value || 0);
+  var m = parseFloat(document.getElementById('prog-muscle').value || 0);
+  
+  submitAction('save_progress', {
+    weight: w,
+    fat: f,
+    waist: waist,
+    muscle: m
+  });
+}
+
+// Coach notes feedback actions
+function sendCoachFeedbackFromUI() {
+  var clientSelect = document.getElementById('coach-client-select');
+  var client_username = clientSelect.value;
+  var msg = document.getElementById('coach-message-text').value;
+  
+  if (!msg.trim()) { alert('Please enter a message.'); return; }
+  
+  submitAction('send_feedback', {
+    client: client_username,
+    message: msg
+  });
+}
+
+// Simulation toggle
+window.isSimulatingClient = false;
+function toggleClientSim() {
+  var user = window.currentUser || { role: 'client' };
+  if (user.role === 'coach') {
+    window.isSimulatingClient = !window.isSimulatingClient;
+    var btn = document.querySelector('.btn-switch');
+    if (window.isSimulatingClient) {
+      btn.innerHTML = '🔄 Back to Coach View';
+      document.querySelector('.user-role').textContent = 'CLIENT VIEW';
+      
+      var coachingNavItem = document.querySelectorAll('.nav-item')[6];
+      var clientsNavItem = document.querySelectorAll('.nav-item')[7];
+      if (coachingNavItem) coachingNavItem.style.display = 'none';
+      if (clientsNavItem) clientsNavItem.style.display = 'none';
+      
+      var coachDashboardCard = document.querySelector('#page-dashboard .card.col:nth-child(4)');
+      if (coachDashboardCard) coachDashboardCard.style.display = 'none';
+    } else {
+      btn.innerHTML = '🔄 Switch to Client View';
+      document.querySelector('.user-role').textContent = 'COACH';
+      
+      var coachingNavItem = document.querySelectorAll('.nav-item')[6];
+      var clientsNavItem = document.querySelectorAll('.nav-item')[7];
+      if (coachingNavItem) coachingNavItem.style.display = 'flex';
+      if (clientsNavItem) clientsNavItem.style.display = 'flex';
+      
+      var coachDashboardCard = document.querySelector('#page-dashboard .card.col:nth-child(4)');
+      if (coachDashboardCard) coachDashboardCard.style.display = 'flex';
+    }
+  }
+}
+
+// Populating initial values
+function populateFoods() {
+  filterFoods();
+  filterFoods2('');
+}
+
+function populateNutritionDb() {
+  var tbody = document.querySelector('#page-nutrition tbody');
+  if (!tbody) return;
+  var html = '';
+  (window.foodDatabase || []).forEach(function(food) {
+    html += '<tr><td>🍽️ ' + food.name + '</td><td>' + food.serving_g + 'g</td><td style="color:var(--red)">' + food.calories + '</td><td style="color:#22c55e">' + food.protein + 'g</td><td style="color:#f59e0b">' + food.carbs + 'g</td><td style="color:#3b82f6">' + food.fat + 'g</td><td><span class="macro-chip" style="background:rgba(255,51,75,.12);color:var(--red)">Food</span></td></tr>';
+  });
+  if (html) tbody.innerHTML = html;
+}
+
+function initApp() {
+  var user = window.currentUser || { username: 'Client', role: 'client', uuid: '' };
+  var todayMeals = window.todayMeals || [];
+  var clientsData = window.clientsData || [];
+  var progressHistory = window.progressHistory || [];
+  var feedbackMessages = window.feedbackMessages || [];
+
+  // Update elements
+  document.querySelector('.tb-greeting').textContent = 'Hello, ' + user.username;
+  document.querySelector('.tb-ua').textContent = user.username.substring(0, 1).toUpperCase();
+  document.querySelector('.avatar').textContent = user.username.substring(0, 2).toUpperCase();
+  document.querySelector('.user-name').textContent = user.username;
+  document.querySelector('.user-role').textContent = user.role.toUpperCase();
+
+  var isCoach = (user.role === 'coach');
+  var coachingNavItem = document.querySelectorAll('.nav-item')[6];
+  var clientsNavItem = document.querySelectorAll('.nav-item')[7];
+  
+  if (!isCoach) {
+    if (coachingNavItem) coachingNavItem.style.display = 'none';
+    if (clientsNavItem) clientsNavItem.style.display = 'none';
+    document.querySelector('.btn-switch').style.display = 'none';
+    var coachDashboardCard = document.querySelector('#page-dashboard .card.col:nth-child(4)');
+    if (coachDashboardCard) coachDashboardCard.style.display = 'none';
+  } else {
+    if (coachingNavItem) coachingNavItem.style.display = 'flex';
+    if (clientsNavItem) clientsNavItem.style.display = 'flex';
+    document.querySelector('.btn-switch').style.display = 'flex';
+    var coachDashboardCard = document.querySelector('#page-dashboard .card.col:nth-child(4)');
+    if (coachDashboardCard) coachDashboardCard.style.display = 'flex';
+  }
+
+  // Calculate macros consumed
+  var consumedCal = 0, consumedPro = 0, consumedCar = 0, consumedFat = 0;
+  todayMeals.forEach(function(item) {
+    consumedCal += parseFloat(item.calories || 0);
+    consumedPro += parseFloat(item.protein || 0);
+    consumedCar += parseFloat(item.carbs || 0);
+    consumedFat += parseFloat(item.fat || 0);
+  });
+  consumedCal = Math.round(consumedCal);
+  consumedPro = Math.round(consumedPro);
+  consumedCar = Math.round(consumedCar);
+  consumedFat = Math.round(consumedFat);
+
+  var targetCal = 2300, targetPro = 150, targetCar = 220, targetFat = 70;
+  
+  document.querySelectorAll('.macro-value')[0].textContent = consumedCal.toLocaleString();
+  document.querySelectorAll('.macro-sub')[0].textContent = 'of ' + targetCal + ' kcal';
+  document.querySelectorAll('.macro-bar-fill')[0].style.width = Math.min(100, Math.round((consumedCal / targetCal) * 100)) + '%';
+
+  document.querySelectorAll('.macro-value')[1].textContent = consumedPro + 'g';
+  document.querySelectorAll('.macro-sub')[1].textContent = 'of ' + targetPro + 'g';
+  document.querySelectorAll('.macro-bar-fill')[1].style.width = Math.min(100, Math.round((consumedPro / targetPro) * 100)) + '%';
+
+  document.querySelectorAll('.macro-value')[2].textContent = consumedCar + 'g';
+  document.querySelectorAll('.macro-sub')[2].textContent = 'of ' + targetCar + 'g';
+  document.querySelectorAll('.macro-bar-fill')[2].style.width = Math.min(100, Math.round((consumedCar / targetCar) * 100)) + '%';
+
+  document.querySelectorAll('.macro-value')[3].textContent = consumedFat + 'g';
+  document.querySelectorAll('.macro-sub')[3].textContent = 'of ' + targetFat + 'g';
+  document.querySelectorAll('.macro-bar-fill')[3].style.width = Math.min(100, Math.round((consumedFat / targetFat) * 100)) + '%';
+
+  var overallProgress = Math.round(((consumedCal / targetCal) + (consumedPro / targetPro)) / 2 * 100);
+  overallProgress = Math.min(100, Math.max(0, overallProgress || 0));
+  document.querySelector('.progress-big').textContent = overallProgress + '%';
+  document.querySelector('.progress-bar-fill').style.width = overallProgress + '%';
+
+  // Render meals list
+  var mealsContainer = document.querySelector('#page-dashboard .card.col:nth-child(1)');
+  if (mealsContainer) {
+    var mealsGroup = { Breakfast: [], Lunch: [], Dinner: [], Snack: [] };
+    todayMeals.forEach(function(item) {
+      var mt = item.meal_type || 'Snack';
+      if (mealsGroup[mt]) mealsGroup[mt].push(item);
+    });
+
+    var mealsHtml = '<div class="card-title">Today\'s Meals <span class="see-all" onclick="navigate(\'logfood\')">View All</span></div>';
+    var mealIcons = { Breakfast: '🥣', Lunch: '🍗', Dinner: '🍲', Snack: '🍎' };
+    
+    Object.keys(mealsGroup).forEach(function(type) {
+      var items = mealsGroup[type];
+      if (items.length > 0) {
+        var foodNames = items.map(function(i) { return i.food_name; }).join(', ');
+        var mCal = Math.round(items.reduce(function(s, i) { return s + (i.calories || 0); }, 0));
+        var mPro = Math.round(items.reduce(function(s, i) { return s + (i.protein || 0); }, 0));
+        var mCar = Math.round(items.reduce(function(s, i) { return s + (i.carbs || 0); }, 0));
+        var mFat = Math.round(items.reduce(function(s, i) { return s + (i.fat || 0); }, 0));
+        
+        mealsHtml += `
+          <div class="meal-item">
+            <div class="meal-img">${mealIcons[type] || '🍽️'}</div>
+            <div class="meal-info">
+              <div class="meal-name">${type}</div>
+              <div class="meal-foods">${foodNames}</div>
+              <div class="meal-macros">
+                <span class="meal-kcal">${mCal} kcal</span>
+                <span class="macro-chip" style="background:rgba(34,197,94,.15);color:#22c55e">P ${mPro}g</span>
+                <span class="macro-chip" style="background:rgba(245,158,11,.15);color:#f59e0b">C ${mCar}g</span>
+                <span class="macro-chip" style="background:rgba(59,130,246,.15);color:#3b82f6">F ${mFat}g</span>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+    });
+
+    if (todayMeals.length === 0) {
+      mealsHtml += '<div style="color:var(--muted);font-size:12px;text-align:center;padding:16px">No meals logged today yet.</div>';
+    }
+    
+    mealsHtml += '<div class="add-meal-row" onclick="navigate(\'logfood\')">+ Add Meal</div>';
+    mealsContainer.innerHTML = mealsHtml;
+  }
+
+  // Weight history sparkline
+  if (progressHistory.length > 0) {
+    var latestWeight = progressHistory[progressHistory.length - 1].weight || 0;
+    var latestWaist = progressHistory[progressHistory.length - 1].waist || 0;
+    document.querySelector('.wc-value').textContent = latestWeight + ' kg';
+    
+    var svgEl = document.querySelector('.sparkline svg');
+    if (svgEl && progressHistory.length > 1) {
+      var width = 200, height = 50;
+      var weights = progressHistory.map(function(p) { return p.weight; }).filter(Boolean);
+      var minW = Math.min.apply(null, weights) - 1;
+      var maxW = Math.max.apply(null, weights) + 1;
+      var range = maxW - minW || 1;
+      
+      var points = [];
+      weights.forEach(function(w, i) {
+        var x = (i / (weights.length - 1 || 1)) * width;
+        var y = height - ((w - minW) / range) * (height - 15) - 10;
+        points.push(x + ',' + y);
+      });
+      
+      var pathD = 'M' + points.join(' L');
+      var areaD = pathD + ' L' + width + ',' + height + ' L0,' + height + 'Z';
+      
+      svgEl.querySelector('path:nth-of-type(1)').setAttribute('d', pathD);
+      svgEl.querySelector('path:nth-of-type(2)').setAttribute('d', areaD);
+      svgEl.querySelector('circle').setAttribute('cx', points[points.length - 1].split(',')[0]);
+      svgEl.querySelector('circle').setAttribute('cy', points[points.length - 1].split(',')[1]);
+    }
+    document.querySelectorAll('.stat-value')[0].textContent = latestWeight + ' kg';
+    document.querySelectorAll('.stat-value')[1].textContent = latestWaist + ' cm';
+  }
+
+  // Coach client lists
+  if (isCoach && clientsData.length > 0) {
+    document.querySelector('.cs-value').textContent = clientsData.length;
+    var clientListHtml = clientsData.map(function(c) {
+      return `
+        <div class="client-item">
+          <div class="client-av" style="background:${c.color}">${c.id}</div>
+          <div class="client-info">
+            <div class="client-name">${c.name}</div>
+            <div class="client-prog">Progress ${c.prog}%</div>
+            <div class="client-bar"><div class="client-bar-fill" style="width:${c.prog}%;background:var(--green)"></div></div>
+          </div>
+        </div>
+      `;
+    }).join('');
+    
+    var clientOverviewContainer = document.querySelector('#page-dashboard .card.col:nth-child(4)');
+    if (clientOverviewContainer) {
+      clientOverviewContainer.innerHTML = `
+        <div class="card-title">Coach Dashboard <span class="see-all" onclick="navigate('clients')">View All &#8594;</span></div>
+        <div class="coach-stat">
+          <div><div class="cs-label">Total Clients</div><div class="cs-value">${clientsData.length}</div><div class="cs-change">Active Plans</div></div>
+          <div class="cs-icon">👥</div>
+        </div>
+        <div class="card-title" style="margin-bottom:7px">Client Overview</div>
+        ${clientListHtml}
+      `;
+    }
+  }
+
+  // Feedback pages setup
+  if (isCoach) {
+    var feedbackRow = document.querySelector('#page-feedback .row');
+    if (feedbackRow) {
+      feedbackRow.innerHTML = `
+        <div class="card" style="flex:1">
+          <div class="card-title">🔑 Send Client Directives</div>
+          <div style="margin-bottom:12px">
+            <label style="font-size:12px;color:var(--muted2);display:block;margin-bottom:5px">Select Client</label>
+            <select id="coach-client-select" class="inp" style="width:100%;padding:8px;background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:8px">
+              ${clientsData.map(function(c) { return '<option value="' + c.name + '">' + c.name + '</option>'; }).join('')}
+            </select>
+          </div>
+          <div style="margin-bottom:12px">
+            <label style="font-size:12px;color:var(--muted2);display:block;margin-bottom:5px">Message / Guidance</label>
+            <textarea id="coach-message-text" class="inp" style="width:100%;height:120px;padding:8px;background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:8px" placeholder="Write feedback, nutritional plans, or adjustments..."></textarea>
+          </div>
+          <button class="add-meal-btn" onclick="sendCoachFeedbackFromUI()">💾 Send Guidance Notes</button>
+        </div>
+      `;
+    }
+  } else {
+    var feedbackListContainer = document.querySelector('#page-feedback .card:nth-of-type(1)');
+    if (feedbackListContainer) {
+      var notesHtml = '<div class="card-title">Coach Feedback</div>';
+      if (feedbackMessages.length > 0) {
+        feedbackMessages.forEach(function(note) {
+          notesHtml += `
+            <div class="feedback-item">
+              <div class="fb-header">
+                <div class="fb-av" style="background:linear-gradient(135deg,#f59e0b,#ef4444)">CA</div>
+                <div class="fb-name">Coach Abhishek</div>
+                <div class="fb-time">${note.created_at.substring(0, 10)}</div>
+              </div>
+              <div class="fb-text">${note.note}</div>
+            </div>
+          `;
+        });
+      } else {
+        notesHtml += '<div style="color:var(--muted);font-size:12px;text-align:center;padding:16px">No directives from Coach Abhishek yet.</div>';
+      }
+      feedbackListContainer.innerHTML = notesHtml;
+    }
+  }
+
+  populateFoods();
+  populateNutritionDb();
+}
+
+initApp();
+</script>
+</body>
+</html>
