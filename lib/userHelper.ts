@@ -98,3 +98,29 @@ export async function getOrCreatePublicUser(sessionUser: any): Promise<{
 
   return sessionUser.id ? { id: sessionUser.id, username: newUsername, role: "client" } : null;
 }
+
+export async function resolveActiveUserId(userProp?: any): Promise<string | null> {
+  if (typeof window !== "undefined") {
+    const localRyvom = localStorage.getItem("ryvom_user");
+    if (localRyvom) {
+      try {
+        const parsed = JSON.parse(localRyvom);
+        if (parsed?.id) return parsed.id;
+      } catch (e) {}
+    }
+  }
+
+  if (userProp) {
+    const publicUser = await getOrCreatePublicUser(userProp);
+    if (publicUser?.id) return publicUser.id;
+    if (userProp.id) return userProp.id;
+  }
+
+  const { data: authData } = await supabase.auth.getSession();
+  if (authData?.session?.user) {
+    const publicUser = await getOrCreatePublicUser(authData.session.user);
+    return publicUser?.id || authData.session.user.id;
+  }
+
+  return null;
+}

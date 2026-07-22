@@ -1,8 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import Auth from "@/components/Auth";
+import Dashboard from "@/components/Dashboard";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { getOrCreatePublicUser, fileToBase64 } from "@/lib/userHelper";
 
@@ -183,46 +185,11 @@ export default function Home() {
     switch (activeTab) {
       case "dashboard":
         return (
-          <div className="space-y-6">
-            {/* Stats Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="p-6 rounded-2xl bg-[#121216] border border-zinc-800/50 shadow-xl transition-all duration-300 hover:border-zinc-700/50">
-                <div className="text-sm text-zinc-400 mb-1">Bench Press Max</div>
-                <div className="text-3xl font-extrabold text-white tracking-tight">102.5 kg</div>
-              </div>
-              <div className="p-6 rounded-2xl bg-[#121216] border border-zinc-800/50 shadow-xl transition-all duration-300 hover:border-zinc-700/50">
-                <div className="text-sm text-zinc-400 mb-1">Squat Max</div>
-                <div className="text-3xl font-extrabold text-white tracking-tight">145.0 kg</div>
-              </div>
-              <div className="p-6 rounded-2xl bg-[#121216] border border-zinc-800/50 shadow-xl transition-all duration-300 hover:border-zinc-700/50">
-                <div className="text-sm text-zinc-400 mb-1">Deadlift Max</div>
-                <div className="text-3xl font-extrabold text-white tracking-tight">180.0 kg</div>
-              </div>
-              <div className="p-6 rounded-2xl bg-[#121216] border border-zinc-800/50 shadow-xl transition-all duration-300 hover:border-zinc-700/50">
-                <div className="text-sm text-zinc-400 mb-1">Body Weight</div>
-                <div className="text-3xl font-extrabold text-[#ff334b] tracking-tight">78.4 kg</div>
-              </div>
-            </div>
-
-            {/* Quick Actions */}
-            <div className="p-6 rounded-2xl bg-[#121216] border border-zinc-800/50 shadow-xl">
-              <h3 className="text-lg font-extrabold text-white mb-4">Quick Log</h3>
-              <div className="flex flex-wrap gap-3">
-                <button 
-                  onClick={() => setActiveTab("workouts")}
-                  className="px-5 py-3 rounded-xl bg-[#ff334b] hover:bg-[#e02d41] text-white font-bold text-sm transition shadow-lg shadow-[#ff334b]/20 active:scale-[0.98]"
-                >
-                  + Log Workout
-                </button>
-                <button 
-                  onClick={() => setActiveTab("nutrition")}
-                  className="px-5 py-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-sm transition active:scale-[0.98]"
-                >
-                  + Log Meal with AI
-                </button>
-              </div>
-            </div>
-          </div>
+          <Dashboard
+            user={user}
+            onNavigateToNutrition={() => setActiveTab("nutrition")}
+            onNavigateToWorkouts={() => setActiveTab("workouts")}
+          />
         );
       case "workouts":
         return (
@@ -415,6 +382,12 @@ export default function Home() {
             >
               Nutrition
             </button>
+            <Link
+              href="/settings"
+              className="px-4 py-2 rounded-xl text-sm font-semibold text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/30 transition"
+            >
+              Settings
+            </Link>
             
             <div className="h-6 w-px bg-zinc-800 mx-2" />
             
