@@ -107,6 +107,10 @@ export default function Dashboard({ user, onNavigateToNutrition, onNavigateToWor
   const [addingStapleId, setAddingStapleId] = useState<string | null>(null);
   const [quickAddFeedback, setQuickAddFeedback] = useState<string | null>(null);
 
+  // Inline editing states for logged meals
+  const [editingMealId, setEditingMealId] = useState<string | null>(null);
+  const [editingGrams, setEditingGrams] = useState<number>(0);
+
   const fetchDashboardData = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -134,7 +138,7 @@ export default function Dashboard({ user, onNavigateToNutrition, onNavigateToWor
         settingsData = globalSet;
       }
 
-      // Check localStorage for ryvom_user_settings
+      // Check localStorage for ryvom_user_settings override
       let localTargets = null;
       if (typeof window !== "undefined") {
         const s = localStorage.getItem("ryvom_user_settings");
@@ -198,27 +202,90 @@ export default function Dashboard({ user, onNavigateToNutrition, onNavigateToWor
     fetchDashboardData();
   }, [fetchDashboardData]);
 
+  // Delete logged meal item handler
+  const handleDeleteMeal = async (mealId: string) => {
+    // Optimistically remove from state so consumption totals and rings update live
+    setTodayMeals((prev) => prev.filter((m) => m.id !== mealId));
+    setQuickAddFeedback("✓ Removed food item");
+    setTimeout(() => setQuickAddFeedback(null), 3000);
+
+    try {
+      const targetUserId = await resolveActiveUserId(user);
+      let query = supabase.from("meal_logs").delete().eq("id", mealId);
+      if (targetUserId) query = query.eq("user_id", targetUserId);
+
+      const { error: delErr } = await query;
+      if (delErr) {
+        console.error("Delete meal_logs error:", delErr);
+        await supabase.from("meals").delete().eq("id", mealId);
+      }
+    } catch (err: any) {
+      console.error("Delete meal error:", err);
+    }
+  };
+
+  // Edit quantity / grams handler
+  const handleSaveEditedGrams = async (meal: MealLog, newGrams: number) => {
+    if (!newGrams || newGrams <= 0 || newGrams === meal.weight_g) {
+      setEditingMealId(null);
+      return;
+    }
+
+    const oldGrams = meal.weight_g || 100;
+    const ratio = newGrams / oldGrams;
+
+    const updatedMeal: MealLog = {
+      ...meal,
+      weight_g: newGrams,
+      calories: Math.max(1, Math.round(meal.calories * ratio)),
+      protein: Math.max(0, Math.round((meal.protein * ratio) * 10) / 10),
+      carbs: Math.max(0, Math.round((meal.carbs * ratio) * 10) / 10),
+      fats: Math.max(0, Math.round((meal.fats * ratio) * 10) / 10),
+    };
+
+    // Optimistically update local state so totals recalculate in real-time
+    setTodayMeals((prev) => prev.map((m) => (m.id === meal.id ? updatedMeal : m)));
+    setEditingMealId(null);
+    setQuickAddFeedback(`✓ Recalculated macros for ${newGrams}g (${updatedMeal.calories} kcal)`);
+    setTimeout(() => setQuickAddFeedback(null), 3500);
+
+    try {
+      const targetUserId = await resolveActiveUserId(user);
+      let query = supabase
+        .from("meal_logs")
+        .update({
+          weight_g: updatedMeal.weight_g,
+          calories: updatedMeal.calories,
+          protein: updatedMeal.protein,
+          carbs: updatedMeal.carbs,
+          fats: updatedMeal.fats,
+        })
+        .eq("id", meal.id);
+
+      if (targetUserId) query = query.eq("user_id", targetUserId);
+
+      const { error: updateErr } = await query;
+      if (updateErr) {
+        console.error("Update meal_logs error:", updateErr);
+      }
+    } catch (err: any) {
+      console.error("Update meal error:", err);
+    }
+  };
+
   // Quick-Add Async Handler
   const handleQuickAdd = async (staple: StapleMeal) => {
     setAddingStapleId(staple.id);
     setQuickAddFeedback(null);
 
     try {
-      let publicUser = await getOrCreatePublicUser(user);
-      if (!publicUser?.id) {
-        const { data: authData } = await supabase.auth.getSession();
-        if (authData?.session?.user) {
-          publicUser = await getOrCreatePublicUser(authData.session.user);
-        }
-      }
-
-      const targetUserId = publicUser?.id || user?.id;
+      const targetUserId = await resolveActiveUserId(user);
       if (!targetUserId) {
         alert("Could not verify user session for quick add.");
         return;
       }
 
-      const { error: insertError } = await supabase
+      const { error: insertErr } = await supabase
         .from("meal_logs")
         .insert([
           {
@@ -235,7 +302,7 @@ export default function Dashboard({ user, onNavigateToNutrition, onNavigateToWor
           },
         ]);
 
-      if (insertError) throw insertError;
+      if (insertErr) throw insertErr;
 
       // Provide immediate success feedback banner
       setQuickAddFeedback(`⚡ Added "${staple.food_item}" (+${staple.calories} kcal)`);
@@ -343,7 +410,7 @@ export default function Dashboard({ user, onNavigateToNutrition, onNavigateToWor
         </button>
       </div>
 
-      {/* Quick-Add Success Banner */}
+      {/* Quick-Add / Feedback Banner */}
       {quickAddFeedback && (
         <div className="p-4 rounded-xl text-xs font-bold border bg-emerald-950/30 border-emerald-700/60 text-emerald-400 shadow-lg animate-fade-in flex items-center justify-between">
           <span>{quickAddFeedback}</span>
@@ -461,7 +528,7 @@ export default function Dashboard({ user, onNavigateToNutrition, onNavigateToWor
             </div>
           </div>
 
-          {/* Today's Meals Section */}
+          {/* Today's Logged Meals Section with Delete & Quantity Editing */}
           <div className="p-6 rounded-2xl bg-[#121216] border border-zinc-800/60 shadow-xl space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-base font-extrabold text-white flex items-center gap-2">
@@ -492,34 +559,93 @@ export default function Dashboard({ user, onNavigateToNutrition, onNavigateToWor
               </div>
             ) : (
               <div className="divide-y divide-zinc-800/60">
-                {todayMeals.map((meal) => (
-                  <div key={meal.id} className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                    <div>
-                      <div className="text-sm font-bold text-white flex items-center gap-2">
-                        <span>{meal.meal_name}</span>
-                        <span className="text-xs font-medium text-zinc-400">({meal.food_item})</span>
-                      </div>
-                      <div className="text-xs text-zinc-500 mt-0.5">
-                        {meal.weight_g}g • {new Date(meal.logged_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </div>
-                    </div>
+                {todayMeals.map((meal) => {
+                  const isEditingThis = editingMealId === meal.id;
+                  return (
+                    <div key={meal.id} className="py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 group">
+                      <div className="space-y-1">
+                        <div className="text-sm font-bold text-white flex items-center gap-2">
+                          <span>{meal.meal_name}</span>
+                          <span className="text-xs font-medium text-zinc-400">({meal.food_item})</span>
+                        </div>
 
-                    <div className="flex items-center gap-3 text-xs font-semibold">
-                      <span className="text-rose-400 font-bold bg-rose-500/10 px-2 py-1 rounded-md border border-rose-500/20">
-                        {meal.calories} kcal
-                      </span>
-                      <span className="text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded-md">
-                        P: {meal.protein}g
-                      </span>
-                      <span className="text-cyan-400 bg-cyan-500/10 px-2 py-1 rounded-md">
-                        C: {meal.carbs}g
-                      </span>
-                      <span className="text-amber-400 bg-amber-500/10 px-2 py-1 rounded-md">
-                        F: {meal.fats}g
-                      </span>
+                        {/* Inline Grams Editing */}
+                        <div className="flex items-center gap-2 text-xs text-zinc-400">
+                          {isEditingThis ? (
+                            <div className="flex items-center gap-1.5">
+                              <input
+                                type="number"
+                                required
+                                min="1"
+                                max="5000"
+                                value={editingGrams}
+                                onChange={(e) => setEditingGrams(Number(e.target.value))}
+                                className="w-20 bg-[#0b0b0e] border border-zinc-700 rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:border-[#ff334b]"
+                              />
+                              <span className="text-xs text-zinc-400">g</span>
+                              <button
+                                onClick={() => handleSaveEditedGrams(meal, editingGrams)}
+                                className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] rounded-md transition"
+                              >
+                                Save
+                              </button>
+                              <button
+                                onClick={() => setEditingMealId(null)}
+                                className="px-2 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-[10px] rounded-md transition"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold text-zinc-300">{meal.weight_g}g</span>
+                              <button
+                                onClick={() => {
+                                  setEditingMealId(meal.id);
+                                  setEditingGrams(meal.weight_g);
+                                }}
+                                title="Edit weight in grams"
+                                className="text-[10px] font-medium text-zinc-500 hover:text-zinc-200 underline transition"
+                              >
+                                ✏️ Edit g
+                              </button>
+                              <span>•</span>
+                              <span className="text-zinc-500">
+                                {new Date(meal.logged_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between sm:justify-end gap-3">
+                        <div className="flex items-center gap-2 text-xs font-semibold">
+                          <span className="text-rose-400 font-bold bg-rose-500/10 px-2 py-1 rounded-md border border-rose-500/20">
+                            {meal.calories} kcal
+                          </span>
+                          <span className="text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded-md">
+                            P: {meal.protein}g
+                          </span>
+                          <span className="text-cyan-400 bg-cyan-500/10 px-2 py-1 rounded-md">
+                            C: {meal.carbs}g
+                          </span>
+                          <span className="text-amber-400 bg-amber-500/10 px-2 py-1 rounded-md">
+                            F: {meal.fats}g
+                          </span>
+                        </div>
+
+                        {/* Delete Logged Meal Button */}
+                        <button
+                          onClick={() => handleDeleteMeal(meal.id)}
+                          title="Delete logged item"
+                          className="p-1.5 rounded-lg bg-zinc-800/40 hover:bg-red-950/60 text-zinc-500 hover:text-red-400 border border-zinc-800 hover:border-red-900/50 transition active:scale-95"
+                        >
+                          🗑️
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
