@@ -414,12 +414,12 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Inter'
           </div>
           <div class="recent-label">Recent Foods <span class="see-all">See All</span></div>
           <div id="food-list">
-            <div class="food-item"><div class="food-img" style="background:rgba(239,68,68,.12)">&#x1F357;</div><div class="food-info"><div class="food-name">Chicken Breast (Grilled)</div><div class="food-meta">100g &bull; 165 kcal</div></div><button class="add-btn" onclick="addFood('Chicken Breast (Grilled)','100g',165)">+</button></div>
-            <div class="food-item"><div class="food-img" style="background:rgba(245,158,11,.12)">&#x1F35A;</div><div class="food-info"><div class="food-name">Cooked Rice</div><div class="food-meta">100g &bull; 130 kcal</div></div><button class="add-btn" onclick="addFood('Cooked Rice','160g',195)">+</button></div>
-            <div class="food-item"><div class="food-img" style="background:rgba(59,130,246,.12)">&#x1F95B;</div><div class="food-info"><div class="food-name">Whey Protein</div><div class="food-meta">1 Scoop &bull; 120 kcal</div></div><button class="add-btn" onclick="addFood('Whey Protein','1 Scoop',120)">+</button></div>
-            <div class="food-item"><div class="food-img" style="background:rgba(234,179,8,.12)">&#x1F34C;</div><div class="food-info"><div class="food-name">Banana</div><div class="food-meta">1 Medium &bull; 105 kcal</div></div><button class="add-btn" onclick="addFood('Banana','1 Medium',105)">+</button></div>
-            <div class="food-item"><div class="food-img" style="background:rgba(239,68,68,.12)">&#x1F95A;</div><div class="food-info"><div class="food-name">Whole Eggs</div><div class="food-meta">2 Large &bull; 140 kcal</div></div><button class="add-btn" onclick="addFood('Whole Eggs','2 Large',140)">+</button></div>
-            <div class="food-item"><div class="food-img" style="background:rgba(168,85,247,.12)">&#x1F9C0;</div><div class="food-info"><div class="food-name">Paneer (High Protein)</div><div class="food-meta">100g &bull; 280 kcal</div></div><button class="add-btn" onclick="addFood('Paneer (HP)','100g',280)">+</button></div>
+            <div class="food-item"><div class="food-img" style="background:rgba(239,68,68,.12)">&#x1F357;</div><div class="food-info"><div class="food-name">Chicken Breast (Grilled)</div><div class="food-meta">100g &bull; 165 kcal</div></div><button class="add-btn" onclick="addFood('chicken-grilled','Chicken Breast (Grilled)','100g',165,31,0,3.6)">+</button></div>
+            <div class="food-item"><div class="food-img" style="background:rgba(245,158,11,.12)">&#x1F35A;</div><div class="food-info"><div class="food-name">Cooked Rice</div><div class="food-meta">100g &bull; 130 kcal</div></div><button class="add-btn" onclick="addFood('cooked-rice','Cooked Rice','160g',195,2.7,28,0.3)">+</button></div>
+            <div class="food-item"><div class="food-img" style="background:rgba(59,130,246,.12)">&#x1F95B;</div><div class="food-info"><div class="food-name">Whey Protein</div><div class="food-meta">1 Scoop &bull; 120 kcal</div></div><button class="add-btn" onclick="addFood('whey-protein','Whey Protein','1 Scoop',120,25,3,1.5)">+</button></div>
+            <div class="food-item"><div class="food-img" style="background:rgba(234,179,8,.12)">&#x1F34C;</div><div class="food-info"><div class="food-name">Banana</div><div class="food-meta">1 Medium &bull; 105 kcal</div></div><button class="add-btn" onclick="addFood('banana','Banana','1 Medium',105,1.3,27,0.4)">+</button></div>
+            <div class="food-item"><div class="food-img" style="background:rgba(239,68,68,.12)">&#x1F95A;</div><div class="food-info"><div class="food-name">Whole Eggs</div><div class="food-meta">2 Large &bull; 140 kcal</div></div><button class="add-btn" onclick="addFood('whole-eggs','Whole Eggs','2 Large',140,12,1.2,10)">+</button></div>
+            <div class="food-item"><div class="food-img" style="background:rgba(168,85,247,.12)">&#x1F9C0;</div><div class="food-info"><div class="food-name">Paneer (High Protein)</div><div class="food-meta">100g &bull; 280 kcal</div></div><button class="add-btn" onclick="addFood('paneer-hp','Paneer (HP)','100g',280,25,4,18)">+</button></div>
           </div>
           <div class="nutrition-summary">
             <div class="nutr-row">
@@ -772,8 +772,11 @@ function navigate(page){
   sessionStorage.setItem('active_view', page);
 }
 
-// Check saved view
-var savedView = sessionStorage.getItem('active_view') || 'dashboard';
+// Check saved view — prefer server-injected restoreView so page
+// state is correctly restored after a Streamlit action rerun.
+var savedView = (window.restoreView && window.restoreView !== 'dashboard')
+  ? window.restoreView
+  : (sessionStorage.getItem('active_view') || 'dashboard');
 navigate(savedView);
 
 // Communication helper
@@ -1298,6 +1301,28 @@ function initApp() {
 }
 
 initApp();
+
+// ── Show action result toast (success/error) injected by Streamlit ─────────
+(function showActionToast() {
+  var result = window.actionResult;
+  if (!result) return;
+  var toast = document.createElement('div');
+  var isOk  = result.ok;
+  toast.style.cssText = [
+    'position:fixed', 'bottom:24px', 'right:24px',
+    'background:' + (isOk ? '#22c55e' : '#ff334b'),
+    'color:#fff', 'padding:10px 18px', 'border-radius:10px',
+    'font-size:13px', 'font-weight:600', 'z-index:99999',
+    'box-shadow:0 6px 24px rgba(0,0,0,.4)',
+    'transition:opacity .4s', 'opacity:1', 'max-width:320px'
+  ].join(';');
+  toast.textContent = (isOk ? '\u2713 ' : '\u2717 ') + result.msg;
+  document.body.appendChild(toast);
+  setTimeout(function() {
+    toast.style.opacity = '0';
+    setTimeout(function() { toast.remove(); }, 450);
+  }, 3500);
+})();
 </script>
 </body>
 </html>

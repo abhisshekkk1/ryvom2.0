@@ -4,7 +4,9 @@ import secrets
 from collections import defaultdict
 from datetime import date, datetime, timedelta
 
-import pandas as pd
+# pandas removed — st.dataframe/st.line_chart accept plain dicts natively
+from google import genai as _genai
+from google.genai import types as _genai_types
 import requests
 import streamlit as st
 import streamlit.components.v1 as components
@@ -1239,22 +1241,77 @@ def dashboard_page() -> None:
     st.markdown(row2_html, unsafe_allow_html=True)
 
 
+# ── AI Food Scanner ────────────────────────────────────────────────────────────
+import google.generativeai as genai
+import json
+
 def nutrition_page() -> None:
-    st.markdown("<div class='ry-card'><h3>🔍 Nutrition Database</h3>", unsafe_allow_html=True)
-    term = st.text_input("Search foods", placeholder="Try chicken, rice, paneer …")
-    try:
-        foods = find_foods(term)
-        if foods:
-            df = pd.DataFrame(foods).drop(columns=["id"])
-            df.columns = [c.title() for c in df.columns]
-            st.dataframe(df, use_container_width=True, hide_index=True)
+    # Build the UI using dark theme card
+    st.markdown("<div class='ry-card'><h3>🤖 AI Nutrition Tracker</h3>", unsafe_allow_html=True)
+    
+    with st.form("nutrition_form", clear_on_submit=False):
+        meal_name = st.text_input("Meal Name", value="Breakfast")
+        
+        col1, col2, col3 = st.columns([2, 1, 1])
+        with col1:
+            food_item = st.text_input("What did you eat?", placeholder="e.g. Chicken breast")
+        with col2:
+            food_state = st.selectbox("State", ["Cooked", "Raw"])
+        with col3:
+            weight_g = st.number_input("Weight (g)", min_value=1, value=100)
+            
+        st.markdown("<br>", unsafe_allow_html=True)
+        submitted = st.form_submit_button("Calculate & Log")
+
+    if submitted:
+        if not food_item.strip():
+            st.error("Please enter a food item.")
         else:
-            st.info("No foods found. Import with import_usda.py or add directly in Supabase.")
-    except Exception as exc:
-        st.error(f"Could not search foods: {exc}")
+            with st.spinner("AI is calculating..."):
+                try:
+                    # Initialize Gemini
+                    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+                    model = genai.GenerativeModel('gemini-3.6-flash')
+                    
+                    # The prompt
+                    prompt = f"""
+                    Calculate the macronutrients for {weight_g}g of {food_state} {food_item}. 
+                    Return strictly valid JSON with keys: "calories", "protein", "carbs", "fats".
+                    Do not include markdown blocks or any other text.
+                    """
+                    
+                    # Call the AI
+                    response = model.generate_content(prompt)
+                    clean_json = response.text.replace("```json", "").replace("```", "").strip()
+                    macros = json.loads(clean_json)
+                    
+                    calories = int(macros.get("calories", 0))
+                    protein = float(macros.get("protein", 0))
+                    carbs = float(macros.get("carbs", 0))
+                    fats = float(macros.get("fats", 0))
+                    
+                    # Insert to Supabase using the exact columns required
+                    supabase.table("meal_logs").insert({
+                        "user_id": st.session_state.user_id,
+                        "meal_name": meal_name,
+                        "food_item": food_item,
+                        "state": food_state,
+                        "weight_g": weight_g,
+                        "calories": calories,
+                        "protein": protein,
+                        "carbs": carbs,
+                        "fats": fats
+                    }).execute()
+                    
+                    st.success(
+                        f"Successfully logged {weight_g}g of {food_item} to {meal_name}!\n\n"
+                        f"**Macros:** {calories} kcal | P: {protein}g | C: {carbs}g | F: {fats}g"
+                    )
+                except Exception as e:
+                    st.error(f"Error: {e}")
+                    
     st.markdown("</div>", unsafe_allow_html=True)
-
-
+    
 def log_food_page() -> None:
     st.markdown("<div class='ry-card'><h3>🍽️ Log Food</h3>", unsafe_allow_html=True)
     meal_type = st.selectbox("Meal Type", ["Breakfast", "Lunch", "Dinner", "Snack"])
@@ -1354,38 +1411,252 @@ def log_food_page() -> None:
     st.markdown("</div>", unsafe_allow_html=True)
 
 
+# ── E1RM math helpers ──────────────────────────────────────────────────────────
+# Standard powerlifting RPE chart: (reps, rpe) → percentage of 1RM
+# Source: Reactive Training Systems / commonly used RPE table
+_RPE_TABLE: dict[tuple[int, float], float] = {
+    (1, 10): 1.000, (1, 9.5): 0.978, (1, 9): 0.955, (1, 8.5): 0.939,
+    (1, 8):  0.922, (1, 7.5): 0.907, (1, 7): 0.892, (1, 6.5): 0.878,
+    (1, 6):  0.863,
+    (2, 10): 0.955, (2, 9.5): 0.939, (2, 9): 0.922, (2, 8.5): 0.907,
+    (2, 8):  0.892, (2, 7.5): 0.878, (2, 7): 0.863, (2, 6.5): 0.849,
+    (2, 6):  0.835,
+    (3, 10): 0.922, (3, 9.5): 0.907, (3, 9): 0.892, (3, 8.5): 0.878,
+    (3, 8):  0.863, (3, 7.5): 0.849, (3, 7): 0.835, (3, 6.5): 0.821,
+    (3, 6):  0.807,
+    (4, 10): 0.892, (4, 9.5): 0.878, (4, 9): 0.863, (4, 8.5): 0.849,
+    (4, 8):  0.835, (4, 7.5): 0.821, (4, 7): 0.807, (4, 6.5): 0.794,
+    (4, 6):  0.781,
+    (5, 10): 0.863, (5, 9.5): 0.849, (5, 9): 0.835, (5, 8.5): 0.821,
+    (5, 8):  0.807, (5, 7.5): 0.794, (5, 7): 0.781, (5, 6.5): 0.768,
+    (5, 6):  0.755,
+    (6, 10): 0.835, (6, 9.5): 0.821, (6, 9): 0.807, (6, 8.5): 0.794,
+    (6, 8):  0.781, (6, 7.5): 0.768, (6, 7): 0.755, (6, 6.5): 0.742,
+    (6, 6):  0.730,
+    (7, 10): 0.807, (7, 9.5): 0.794, (7, 9): 0.781, (7, 8.5): 0.768,
+    (7, 8):  0.755, (7, 7.5): 0.742, (7, 7): 0.730, (7, 6.5): 0.717,
+    (7, 6):  0.705,
+    (8, 10): 0.781, (8, 9.5): 0.768, (8, 9): 0.755, (8, 8.5): 0.742,
+    (8, 8):  0.730, (8, 7.5): 0.717, (8, 7): 0.705, (8, 6.5): 0.693,
+    (8, 6):  0.681,
+    (9, 10): 0.755, (9, 9.5): 0.742, (9, 9): 0.730, (9, 8.5): 0.717,
+    (9, 8):  0.705, (9, 7.5): 0.693, (9, 7): 0.681, (9, 6.5): 0.669,
+    (9, 6):  0.658,
+    (10, 10): 0.730, (10, 9.5): 0.717, (10, 9): 0.705, (10, 8.5): 0.693,
+    (10, 8): 0.681, (10, 7.5): 0.669, (10, 7): 0.658, (10, 6.5): 0.647,
+    (10, 6): 0.636,
+    (12, 10): 0.681, (12, 9.5): 0.669, (12, 9): 0.658, (12, 8.5): 0.647,
+    (12, 8): 0.636, (12, 7.5): 0.625, (12, 7): 0.613, (12, 6.5): 0.602,
+    (12, 6): 0.591,
+}
+
+def _rpe_percentage(reps: int, rpe: float) -> float:
+    """Return the % of 1RM for the given reps × RPE cell.
+
+    RPE is rounded to the nearest 0.5. Reps beyond 12 fall back to the
+    Brzycki formula so the table never returns a KeyError.
+    """
+    rpe_rounded = round(rpe * 2) / 2           # snap to nearest 0.5
+    rpe_clamped = max(6.0, min(10.0, rpe_rounded))
+    reps_clamped = max(1, min(reps, 12))
+
+    # Exact table lookup first
+    key = (reps_clamped, rpe_clamped)
+    if key in _RPE_TABLE:
+        return _RPE_TABLE[key]
+
+    # Linear interpolation between adjacent rep rows when needed
+    for r in range(reps_clamped, 13):
+        if (r, rpe_clamped) in _RPE_TABLE:
+            return _RPE_TABLE[(r, rpe_clamped)]
+    return _RPE_TABLE[(12, rpe_clamped)]        # floor fallback
+
+
+def _calc_e1rm(weight: float, reps: int, rpe: float) -> float:
+    """Estimated 1-Rep Max via the RPE percentage table.
+
+    E1RM = weight / percentage_of_1rm
+    Returns 0.0 for invalid inputs.
+    """
+    if weight <= 0 or reps <= 0:
+        return 0.0
+    pct = _rpe_percentage(reps, rpe)
+    return round(weight / pct, 1) if pct > 0 else 0.0
+
+
 def workouts_page() -> None:
+    # Build the UI inside the dark theme card
     st.markdown("<div class='ry-card'><h3>🏋️ Log Workout</h3>", unsafe_allow_html=True)
-    exercises   = ["Bench Press (Barbell)", "Incline Dumbbell Press", "Shoulder Press"]
-    workout_date = st.date_input("Workout date", value=date.today())
-    entered_sets = []
     
-    for exercise in exercises:
-        st.markdown(f"<div style='border-top: 1px solid #24242c; padding-top: 10px; margin-top: 15px;'><b>{exercise}</b></div>", unsafe_allow_html=True)
-        for set_number in range(1, 5):
-            cols = st.columns([1, 2, 2, 2])
-            cols[0].markdown(f"<div style='padding-top: 25px; font-size:12px; color:#94a3b8;'>Set {set_number}</div>", unsafe_allow_html=True)
-            weight = cols[1].number_input("Weight (kg)", min_value=0.0, value=0.0, step=0.5, key=f"w_{exercise}_{set_number}")
-            reps   = cols[2].number_input("Reps",        min_value=0,   value=0,   step=1,   key=f"r_{exercise}_{set_number}")
-            rpe    = cols[3].number_input("RPE",          min_value=1.0, max_value=10.0, value=8.0, step=0.5, key=f"e_{exercise}_{set_number}")
-            if weight > 0 and reps > 0:
-                entered_sets.append({"exercise": exercise, "set_no": set_number, "weight": weight, "reps": reps, "rpe": rpe})
+    with st.form("workout_form", clear_on_submit=False):
+        exercises = [
+            "Bench Press (Barbell)", "Squat (Barbell)", "Deadlift (Barbell)",
+            "Incline Dumbbell Press", "Overhead Press (Barbell)",
+            "Romanian Deadlift", "Bent Over Row (Barbell)",
+            "Pull-Up / Chin-Up", "Dumbbell Curl", "Tricep Pushdown",
+        ]
+        exercise = st.selectbox("Exercise", exercises)
+        
+        col_w, col_r, col_rpe = st.columns(3)
+        with col_w:
+            weight = st.number_input("Weight (kg)", min_value=0.0, max_value=500.0, value=0.0, step=0.5)
+        with col_r:
+            reps = st.number_input("Reps", min_value=0, max_value=30, value=0, step=1)
+        with col_rpe:
+            rpe = st.slider("RPE", min_value=6.0, max_value=10.0, value=8.0, step=0.5)
+            
+        submitted = st.form_submit_button("Log Set")
+
+    if submitted:
+        if weight <= 0 or reps <= 0:
+            st.error("Weight and Reps must both be greater than 0.")
+        else:
+            try:
+                # Calculate E1RM
+                pct = _rpe_percentage(reps, rpe)
+                e1rm = round(weight / pct, 1) if pct > 0 else 0.0
                 
-    st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
-    if st.button("Save workout", type="primary"):
-        if not entered_sets:
-            st.warning("Enter at least one completed set first.")
-            return
-        try:
-            workout = supabase.table("workouts").insert({"user_id": st.session_state.user_id, "workout_date": workout_date.isoformat()}).execute().data[0]
-            supabase.table("workout_sets").insert([{**e, "workout_id": workout["id"]} for e in entered_sets]).execute()
-            st.success(f"Saved {len(entered_sets)} sets.")
-        except Exception as exc:
-            st.error(f"Could not save workout: {exc}")
+                # Insert to Supabase workout_logs
+                supabase.table("workout_logs").insert({
+                    "user_id": st.session_state.user_id,
+                    "exercise_name": exercise,
+                    "weight_kg": weight,
+                    "reps": reps,
+                    "rpe": rpe,
+                    "e1rm": e1rm
+                }).execute()
+                
+                st.success(f"Set logged successfully! Calculated E1RM: {e1rm} kg")
+            except Exception as e:
+                st.error(f"Error: {e}")
+                
     st.markdown("</div>", unsafe_allow_html=True)
 
 
 def progress_page() -> None:
+    import pandas as pd
+    from datetime import datetime
+
+    # 1. Fetch workout logs
+    try:
+        workout_data = supabase.table("workout_logs").select("*").eq("user_id", st.session_state.user_id).execute().data
+    except Exception as exc:
+        workout_data = []
+        st.warning(f"Could not load workout logs: {exc}")
+
+    # 2. Fetch meal logs
+    try:
+        meal_data = supabase.table("meal_logs").select("*").eq("user_id", st.session_state.user_id).execute().data
+    except Exception as exc:
+        meal_data = []
+        st.warning(f"Could not load meal logs: {exc}")
+
+    # 3. Fetch progress history
+    try:
+        progress_data = supabase.table("progress").select("*").eq("user_id", st.session_state.user_id).order("date").execute().data
+    except Exception as exc:
+        progress_data = []
+        st.warning(f"Could not load progress data: {exc}")
+
+    # Empty State Handling
+    if not workout_data and not meal_data and not progress_data:
+        st.info("Log your first workout or meal to see your progress charts!")
+        return
+
+    # ── Calculate weight metrics & 7-Day Moving Average ───────────────────────
+    current_avg_weight = "No data"
+    df_weight = None
+
+    if progress_data:
+        history = [i for i in progress_data if i.get("weight") is not None]
+        if history:
+            # Sort by date
+            history = sorted(history, key=lambda x: x["date"])
+            
+            # Compute 7-day average for each record
+            weight_rows = []
+            for i, record in enumerate(history):
+                c_date = datetime.strptime(record["date"], "%Y-%m-%d").date()
+                c_weight = float(record["weight"])
+                
+                # Filter records within [c_date - 6 days, c_date]
+                last_7 = []
+                for prev in history:
+                    p_date = datetime.strptime(prev["date"], "%Y-%m-%d").date()
+                    if 0 <= (c_date - p_date).days < 7:
+                        last_7.append(float(prev["weight"]))
+                        
+                avg_val = round(sum(last_7) / len(last_7), 2)
+                weight_rows.append({
+                    "Date": record["date"],
+                    "Weight": c_weight,
+                    "7-Day Average": avg_val
+                })
+            
+            if weight_rows:
+                df_weight = pd.DataFrame(weight_rows).set_index("Date")
+                current_avg_weight = f"{weight_rows[-1]['7-Day Average']} kg"
+
+    # ── Calculate E1RM metrics & session curves ────────────────────────────────
+    bench_max = 0.0
+    squat_max = 0.0
+    deadlift_max = 0.0
+    df_workout = None
+
+    if workout_data:
+        records = []
+        for row in workout_data:
+            exercise = row.get("exercise_name", "Unknown Lift")
+            timestamp_str = row.get("created_at") or row.get("logged_at") or datetime.now().isoformat()
+            date_str = timestamp_str[:10]
+            val = float(row.get("e1rm") or 0)
+            records.append({
+                "date": date_str,
+                "exercise_name": exercise,
+                "e1rm": val
+            })
+            
+            # Keep track of absolute maxes for the summary card
+            ex_lower = exercise.lower()
+            if "bench" in ex_lower and val > bench_max:
+                bench_max = val
+            elif "squat" in ex_lower and val > squat_max:
+                squat_max = val
+            elif "deadlift" in ex_lower and val > deadlift_max:
+                deadlift_max = val
+                
+        if records:
+            df_raw = pd.DataFrame(records)
+            df_workout = df_raw.groupby(["date", "exercise_name"])["e1rm"].max().unstack()
+            df_workout = df_workout.sort_index().ffill()
+
+    # ── Nutrition Trends ─────────────────────────────────────────────────────
+    df_nutrition = None
+    if meal_data:
+        nut_records = []
+        for row in meal_data:
+            timestamp_str = row.get("created_at") or row.get("logged_at") or datetime.now().isoformat()
+            date_str = timestamp_str[:10]
+            nut_records.append({
+                "Date": date_str,
+                "Calories": float(row.get("calories") or 0),
+                "Protein": float(row.get("protein") or 0)
+            })
+        if nut_records:
+            df_nut_raw = pd.DataFrame(nut_records)
+            df_nutrition = df_nut_raw.groupby("Date")[["Calories", "Protein"]].sum()
+            df_nutrition = df_nutrition.sort_index()
+
+    # ── Card: Current Stats Summary ───────────────────────────────────────────
+    st.markdown("<div class='ry-card'><h3>📊 Current Stats Summary</h3>", unsafe_allow_html=True)
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Bench Press Max", f"{bench_max} kg" if bench_max > 0 else "No data")
+    m2.metric("Squat Max", f"{squat_max} kg" if squat_max > 0 else "No data")
+    m3.metric("Deadlift Max", f"{deadlift_max} kg" if deadlift_max > 0 else "No data")
+    m4.metric("7-Day Avg Weight", current_avg_weight)
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    # ── Card: Log Progress Form ───────────────────────────────────────────────
     st.markdown("<div class='ry-card'><h3>📈 Log Progress</h3>", unsafe_allow_html=True)
     with st.form("progress_form"):
         logged_on = st.date_input("Date", value=date.today())
@@ -1396,19 +1667,35 @@ def progress_page() -> None:
         try:
             supabase.table("progress").upsert({"user_id": st.session_state.user_id, "date": logged_on.isoformat(), "weight": weight or None, "waist": waist or None}, on_conflict="user_id,date").execute()
             st.success("Progress saved.")
+            st.rerun()
         except Exception as exc:
             st.error(f"Could not save progress: {exc}")
     st.markdown("</div>", unsafe_allow_html=True)
-    
-    st.markdown("<div class='ry-card'><h3>Weight History</h3>", unsafe_allow_html=True)
-    try:
-        history = supabase.table("progress").select("date,weight").eq("user_id", st.session_state.user_id).order("date").execute().data
-        history = [i for i in history if i.get("weight") is not None]
-        if history:
-            st.line_chart(pd.DataFrame(history).set_index("date"))
-    except Exception as exc:
-        st.warning(f"Could not load chart: {exc}")
-    st.markdown("</div>", unsafe_allow_html=True)
+
+    # ── Card: Weight Trend ────────────────────────────────────────────────────
+    if df_weight is not None:
+        st.markdown("<div class='ry-card'><h3>⚖️ Weight Trend (7-Day Moving Average)</h3>", unsafe_allow_html=True)
+        st.line_chart(df_weight)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    # ── Card: Strength Tracker ────────────────────────────────────────────────
+    if df_workout is not None:
+        st.markdown("<div class='ry-card'><h3>💪 E1RM Strength Tracker</h3>", unsafe_allow_html=True)
+        st.line_chart(df_workout)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    # ── Card: Nutrition Trends ────────────────────────────────────────────────
+    if df_nutrition is not None:
+        st.markdown("<div class='ry-card'><h3>🍎 Daily Nutrition Trends</h3>", unsafe_allow_html=True)
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("<b>Daily Calories (kcal)</b>", unsafe_allow_html=True)
+            st.bar_chart(df_nutrition["Calories"])
+        with col2:
+            st.markdown("<b>Daily Protein (g)</b>", unsafe_allow_html=True)
+            st.bar_chart(df_nutrition["Protein"])
+        st.markdown("</div>", unsafe_allow_html=True)
+
 
 
 def feedback_page() -> None:
@@ -1476,6 +1763,114 @@ def feedback_page() -> None:
         except Exception as exc:
             st.error(f"Could not load feedback: {exc}")
     st.markdown("</div>", unsafe_allow_html=True)
+
+
+# ── Action callback functions (called by the query-param action handler) ───────
+def _cb_add_meal(user_id: str, data: dict) -> tuple[bool, str]:
+    """Insert a meal + its items. Returns (success, message)."""
+    meal_type = data.get("meal_type", "Snack")
+    items = data.get("items", [])
+    if not items:
+        return False, "No food items provided."
+    try:
+        meal = supabase.table("meals").insert({
+            "user_id": user_id,
+            "meal_type": meal_type,
+            "meal_date": date.today().isoformat(),
+        }).execute().data[0]
+        rows = []
+        for i in items:
+            qty_str = (
+                str(i.get("qty", "100"))
+                .replace("g", "").replace(" Scoop", "")
+                .replace(" Large", "").replace(" Medium", "")
+                .replace(" pc", "")
+            )
+            try:
+                grams_val = float(qty_str or 100)
+            except ValueError:
+                grams_val = 100.0
+            rows.append({
+                "meal_id": meal["id"],
+                "food_id": i.get("food_id"),
+                "grams": grams_val,
+                "calories": float(i.get("cal") or 0),
+                "protein": float(i.get("protein") or 0),
+                "carbs": float(i.get("carbs") or 0),
+                "fat": float(i.get("fat") or 0),
+            })
+        if rows:
+            supabase.table("meal_items").insert(rows).execute()
+        return True, f"{meal_type} saved successfully!"
+    except Exception as exc:
+        return False, f"Could not save meal: {exc}"
+
+
+def _cb_save_progress(user_id: str, data: dict) -> tuple[bool, str]:
+    """Upsert a progress entry. Returns (success, message)."""
+    try:
+        supabase.table("progress").upsert({
+            "user_id": user_id,
+            "date": date.today().isoformat(),
+            "weight": float(data.get("weight") or 0) or None,
+            "waist": float(data.get("waist") or 0) or None,
+        }, on_conflict="user_id,date").execute()
+        return True, "Progress saved!"
+    except Exception as exc:
+        return False, f"Could not save progress: {exc}"
+
+
+def _cb_save_workout(user_id: str, data: dict) -> tuple[bool, str]:
+    """Insert a workout session with sets. Returns (success, message)."""
+    w_date = data.get("date") or date.today().isoformat()
+    sets = data.get("sets", [])
+    if not sets:
+        return False, "No completed sets provided."
+    try:
+        workout = supabase.table("workouts").insert({
+            "user_id": user_id,
+            "workout_date": w_date,
+        }).execute().data[0]
+        rows = [{
+            "workout_id": workout["id"],
+            "exercise": s["exercise"],
+            "set_no": int(s["set_no"]),
+            "reps": int(s["reps"]),
+            "weight": float(s["weight"]),
+            "rpe": float(s.get("rpe", 8)),
+        } for s in sets]
+        supabase.table("workout_sets").insert(rows).execute()
+        return True, f"{len(sets)} sets saved!"
+    except Exception as exc:
+        return False, f"Could not save workout: {exc}"
+
+
+def _cb_send_feedback(coach_id: str, data: dict) -> tuple[bool, str]:
+    """Insert a coach note/feedback entry. Returns (success, message)."""
+    client_name = data.get("client", "")
+    msg = data.get("message", "").strip()
+    if not client_name or not msg:
+        return False, "Client name and message are both required."
+    try:
+        c_res = (
+            supabase.table("users")
+            .select("id")
+            .eq("username", client_name.lower())
+            .limit(1)
+            .execute()
+            .data
+        )
+        if not c_res:
+            return False, f"Client '{client_name}' not found."
+        client_id = c_res[0]["id"]
+        supabase.table("coach_notes").insert({
+            "coach_id": coach_id,
+            "client_id": client_id,
+            "note": msg,
+        }).execute()
+        return True, f"Feedback sent to {client_name}!"
+    except Exception as exc:
+        return False, f"Could not send feedback: {exc}"
 
 
 # ── Main app ───────────────────────────────────────────────────────────────────
@@ -1553,6 +1948,10 @@ def get_dynamic_dashboard() -> str:
     logo_b64 = get_base64_image("logo_small.jpg")
     html_content = html_content.replace("{{LOGO_BASE64}}", logo_b64)
 
+    # Retrieve action result and restore-view stored by the action handler
+    action_result = st.session_state.pop("action_result", None)   # {"ok": bool, "msg": str}
+    restore_view  = st.session_state.pop("restore_view", "dashboard")
+
     # Create injection script
     injection = f"""
     <script>
@@ -1562,9 +1961,11 @@ def get_dynamic_dashboard() -> str:
       window.progressHistory = {json.dumps(progress_data)};
       window.foodDatabase = {json.dumps(foods)};
       window.feedbackMessages = {json.dumps(notes)};
+      window.actionResult = {json.dumps(action_result)};  // {{ok, msg}} or null
+      window.restoreView  = {json.dumps(restore_view)};   // page to navigate back to
     </script>
     """
-    
+
     html_content = html_content.replace("<head>", f"<head>{injection}")
     return html_content
 
@@ -1679,100 +2080,33 @@ def app() -> None:
 
     # ── Process database actions from query parameters ─────────────────────────
     if "action" in qp:
-        action = qp["action"]
         import json
+        action = qp["action"]
+        # Capture the active page so we can restore it after rerun
+        restore_view = qp.get("view", "dashboard")
         try:
             data = json.loads(qp.get("data", "{}"))
         except Exception:
             data = {}
 
+        # Dispatch to the appropriate standalone callback
+        uid = st.session_state.user_id
         if action == "add_meal":
-            meal_type = data.get("meal_type", "Snack")
-            items = data.get("items", [])
-            if items:
-                try:
-                    # Insert base meal
-                    meal = supabase.table("meals").insert({
-                        "user_id": st.session_state.user_id,
-                        "meal_type": meal_type,
-                        "meal_date": date.today().isoformat()
-                    }).execute().data[0]
-                    
-                    rows = []
-                    for i in items:
-                        # Extract quantity in grams
-                        qty_str = str(i.get("qty", "100")).replace("g", "").replace(" Scoop", "").replace(" Large", "").replace(" Medium", "").replace(" pc", "")
-                        try:
-                            grams_val = float(qty_str or 100)
-                        except ValueError:
-                            grams_val = 100.0
-
-                        rows.append({
-                            "meal_id": meal["id"],
-                            "food_id": i.get("food_id"),
-                            "grams": grams_val,
-                            "calories": float(i.get("cal") or 0),
-                            "protein": float(i.get("protein") or 0),
-                            "carbs": float(i.get("carbs") or 0),
-                            "fat": float(i.get("fat") or 0)
-                        })
-                    
-                    if rows:
-                        supabase.table("meal_items").insert(rows).execute()
-                except Exception as exc:
-                    st.error(f"Could not save meal: {exc}")
-
+            ok, msg = _cb_add_meal(uid, data)
         elif action == "save_progress":
-            try:
-                supabase.table("progress").upsert({
-                    "user_id": st.session_state.user_id,
-                    "date": date.today().isoformat(),
-                    "weight": float(data.get("weight") or 0) or None,
-                    "waist": float(data.get("waist") or 0) or None
-                }, on_conflict="user_id,date").execute()
-            except Exception as exc:
-                st.error(f"Could not save progress: {exc}")
-
+            ok, msg = _cb_save_progress(uid, data)
         elif action == "save_workout":
-            w_date = data.get("date") or date.today().isoformat()
-            sets = data.get("sets", [])
-            if sets:
-                try:
-                    workout = supabase.table("workouts").insert({
-                        "user_id": st.session_state.user_id,
-                        "workout_date": w_date
-                    }).execute().data[0]
-                    
-                    rows = [{
-                        "workout_id": workout["id"],
-                        "exercise": s["exercise"],
-                        "set_no": int(s["set_no"]),
-                        "reps": int(s["reps"]),
-                        "weight": float(s["weight"]),
-                        "rpe": float(s.get("rpe", 8))
-                    } for s in sets]
-                    
-                    supabase.table("workout_sets").insert(rows).execute()
-                except Exception as exc:
-                    st.error(f"Could not save workout: {exc}")
-
+            ok, msg = _cb_save_workout(uid, data)
         elif action == "send_feedback":
-            client_name = data.get("client")
-            msg = data.get("message", "")
-            if client_name and msg:
-                try:
-                    c_res = supabase.table("users").select("id").eq("username", client_name.lower()).limit(1).execute().data
-                    if c_res:
-                        client_id = c_res[0]["id"]
-                        supabase.table("coach_notes").insert({
-                            "coach_id": st.session_state.user_id,
-                            "client_id": client_id,
-                            "note": msg.strip()
-                        }).execute()
-                except Exception as exc:
-                    st.error(f"Could not send feedback: {exc}")
+            ok, msg = _cb_send_feedback(uid, data)
+        else:
+            ok, msg = False, f"Unknown action: {action}"
 
-        # Clear parameters to prevent resubmission
+        # Store result in session state so get_dynamic_dashboard() can inject it
+        st.session_state["action_result"] = {"ok": ok, "msg": msg}
+        st.session_state["restore_view"]  = restore_view
+
+        # Clear query params to prevent resubmission on next refresh
         st.query_params.clear()
         st.rerun()
 
