@@ -118,25 +118,13 @@ export default function Dashboard({ user, onNavigateToNutrition, onNavigateToWor
     try {
       const targetUserId = await resolveActiveUserId(user);
 
-      // 1. Fetch dynamic user target goals from user_settings table for user_id
-      let settingsData = null;
-      if (targetUserId) {
-        const { data: userSet } = await supabase
-          .from("user_settings")
-          .select("*")
-          .eq("user_id", targetUserId)
-          .maybeSingle();
-        settingsData = userSet;
-      }
-
-      if (!settingsData) {
-        const { data: globalSet } = await supabase
-          .from("user_settings")
-          .select("*")
-          .limit(1)
-          .maybeSingle();
-        settingsData = globalSet;
-      }
+      // 1. Fetch dynamic user target goals from user_settings table
+      const { data: dbSet } = await supabase
+        .from("user_settings")
+        .select("*")
+        .limit(1)
+        .maybeSingle();
+      const settingsData = dbSet;
 
       // Check localStorage for ryvom_user_settings override
       let localTargets = null;

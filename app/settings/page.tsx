@@ -147,7 +147,6 @@ export default function SettingsPage() {
           setManualProtein(Number(data.target_protein) || 180);
           setManualCarbs(Number(data.target_carbs) || 150);
           setManualFats(Number(data.target_fats) || 60);
-          if (data.activity_level) setActivityLevel(data.activity_level);
         }
 
         // 3. Fetch latest logged weight from progress/weight_logs so bodyWeightKg defaults to actual latest weight
@@ -187,7 +186,6 @@ export default function SettingsPage() {
       target_protein: activeProtein,
       target_carbs: activeCarbs,
       target_fats: activeFats,
-      activity_level: activityLevel,
     };
 
     try {
