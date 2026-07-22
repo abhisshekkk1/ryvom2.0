@@ -15,6 +15,11 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Ryvom - AI Strength & Nutrition Tracker",
   description: "Monitor your estimated 1-rep max and scan daily nutrition with Gemini AI.",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Ryvom",
+  },
 };
 
 export default function RootLayout({
