@@ -58,6 +58,25 @@ export const RIR_OPTIONS = [
   "4+ RIR",
 ];
 
+// Human maximum weight limits in kg per lift
+export const LIFT_MAX_LIMITS: Record<LiftType, number> = {
+  Deadlift: 500,
+  "Bench Press": 450,
+  Squat: 600,
+};
+
+// Roast array for sarcastic validation errors when weight exceeds human limits
+const sarcasticErrors = [
+  "Did you accidentally park a Honda Civic on the bar?",
+  "Eddie Hall called, he wants his world record back.",
+  "Ego lifting in a database? That's a new low.",
+  "Are you lifting on Jupiter? Check your math.",
+  "Bro thinks he's an Avenger. Lower the weight.",
+  "NASA is looking for someone to manually launch the next shuttle. You in?",
+  "I didn't realize we had a literal forklift using this app.",
+  "Your keyboard must be broken, because nobody is lifting that.",
+];
+
 // Color palette map per lift type
 const LIFT_COLORS: Record<LiftType, { primary: string; bg: string; border: string; icon: string }> = {
   Squat: { primary: "#ff334b", bg: "rgba(255, 51, 75, 0.15)", border: "rgba(255, 51, 75, 0.3)", icon: "🍗" },
@@ -115,6 +134,28 @@ export default function StrengthTracker({ user, readOnly = false }: StrengthTrac
     { id: crypto.randomUUID(), setNum: 2, weightKg: 100, reps: 5, rir: "2 RIR", completed: false },
     { id: crypto.randomUUID(), setNum: 3, weightKg: 100, reps: 5, rir: "1 RIR", completed: false },
   ]);
+
+  // Human limits validation state & computation
+  const [sarcasticRoast, setSarcasticRoast] = useState<string>("");
+  const maxAllowedLimit = LIFT_MAX_LIMITS[liftType] || 600;
+
+  const isDraftWeightExceeded = useMemo(() => {
+    return draftSets.some((row) => {
+      const w = Number(row.weightKg) || 0;
+      return w > maxAllowedLimit;
+    });
+  }, [draftSets, maxAllowedLimit]);
+
+  useEffect(() => {
+    if (isDraftWeightExceeded) {
+      if (!sarcasticRoast) {
+        const randomRoast = sarcasticErrors[Math.floor(Math.random() * sarcasticErrors.length)];
+        setSarcasticRoast(randomRoast);
+      }
+    } else {
+      setSarcasticRoast("");
+    }
+  }, [isDraftWeightExceeded, liftType, draftSets]);
 
   // Filters & Controls
   const [selectedLiftFilter, setSelectedLiftFilter] = useState<LiftFilter>("ALL");
@@ -356,6 +397,12 @@ export default function StrengthTracker({ user, readOnly = false }: StrengthTrac
   // Database Submission Logic: Iterate over all checked completed sets & insert individually
   const handleFinishWorkout = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (isDraftWeightExceeded) {
+      const roast = sarcasticRoast || sarcasticErrors[Math.floor(Math.random() * sarcasticErrors.length)];
+      setError(`🛑 ${roast} (${liftType} max limit: ${maxAllowedLimit} kg)`);
+      return;
+    }
 
     // Filter checked/completed sets
     const completedRows = draftSets.filter((r) => r.completed);
@@ -935,12 +982,22 @@ export default function StrengthTracker({ user, readOnly = false }: StrengthTrac
               </button>
             </div>
 
+            {/* Human Limit Validation Error Banner */}
+            {isDraftWeightExceeded && (
+              <div className="p-3.5 rounded-xl text-xs font-bold border bg-red-950/40 border-red-600/80 text-rose-400 shadow-sm animate-pulse flex items-center gap-2">
+                <span>🛑</span>
+                <span>
+                  {sarcasticRoast || "Weight exceeds realistic human limits for this lift."} ({liftType} max limit: {maxAllowedLimit} kg)
+                </span>
+              </div>
+            )}
+
             {/* Submit Workout Button */}
             <form onSubmit={handleFinishWorkout} className="pt-2">
               <button
                 type="submit"
-                disabled={saving || loading}
-                className="w-full py-3.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 disabled:opacity-50 text-white font-bold text-sm rounded-xl transition shadow-lg shadow-emerald-950/30 active:scale-[0.98] flex items-center justify-center gap-2"
+                disabled={saving || loading || isDraftWeightExceeded}
+                className="w-full py-3.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-sm rounded-xl transition shadow-lg shadow-emerald-950/30 active:scale-[0.98] flex items-center justify-center gap-2"
               >
                 <span>{saving ? "Saving Workout..." : `Finish Workout (${draftSets.filter((r) => r.completed).length} Sets)`}</span>
                 <span>✓</span>
