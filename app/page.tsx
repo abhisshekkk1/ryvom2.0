@@ -7,6 +7,7 @@ import Auth from "@/components/Auth";
 import Dashboard from "@/components/Dashboard";
 import StrengthTracker from "@/components/StrengthTracker";
 import RecipeBuilder from "@/components/RecipeBuilder";
+import ManualLiftLogger from "@/components/ManualLiftLogger";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { getOrCreatePublicUser, fileToBase64 } from "@/lib/userHelper";
 
@@ -200,12 +201,23 @@ export default function Home() {
         return <RecipeBuilder user={user} />;
       case "workouts":
         return (
-          <div className="p-8 rounded-2xl bg-[#121216] border border-zinc-800/50 shadow-xl text-center space-y-3">
-            <div className="text-4xl">🏋️‍♂️</div>
-            <h3 className="text-xl font-bold text-white">Workout Logger</h3>
-            <p className="text-sm text-zinc-400 max-w-md mx-auto">
-              Select your routine or record dynamic sets, reps, weight, and RPE.
-            </p>
+          <div className="space-y-6 max-w-3xl mx-auto">
+            <div className="p-6 rounded-2xl bg-[#121216] border border-zinc-800/80 shadow-xl space-y-4">
+              <div className="flex items-center justify-between border-b border-zinc-800/80 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-xl">
+                    🏆
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-extrabold text-white tracking-tight">Log New PR</h3>
+                    <p className="text-xs text-zinc-400">
+                      Record compound working sets and maximum strength PRs
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <ManualLiftLogger user={user} />
+            </div>
           </div>
         );
       case "nutrition":

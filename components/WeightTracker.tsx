@@ -17,9 +17,10 @@ interface WeightTrackerProps {
   user?: any;
   goalWeight?: number;
   onWeightUpdated?: (newWeight: number) => void;
+  readOnly?: boolean;
 }
 
-export default function WeightTracker({ user, goalWeight = 72.0, onWeightUpdated }: WeightTrackerProps) {
+export default function WeightTracker({ user, goalWeight = 72.0, onWeightUpdated, readOnly = false }: WeightTrackerProps) {
   const [logs, setLogs] = useState<WeightLogEntry[]>([]);
   const [newWeight, setNewWeight] = useState<string>("");
   const [logDate, setLogDate] = useState<string>(new Date().toISOString().split("T")[0]);
@@ -347,43 +348,45 @@ export default function WeightTracker({ user, goalWeight = 72.0, onWeightUpdated
       )}
 
       {/* Quick Weight Logging Form */}
-      <form onSubmit={handleLogWeight} className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
-        <div>
-          <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">
-            Log Weight (kg)
-          </label>
-          <input
-            type="number"
-            step="0.1"
-            required
-            placeholder="e.g. 78.4"
-            value={newWeight}
-            onChange={(e) => setNewWeight(e.target.value)}
-            className="w-full bg-[#0b0b0e] border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#ff334b] transition"
-          />
-        </div>
+      {!readOnly && (
+        <form onSubmit={handleLogWeight} className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+          <div>
+            <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">
+              Log Weight (kg)
+            </label>
+            <input
+              type="number"
+              step="0.1"
+              required
+              placeholder="e.g. 78.4"
+              value={newWeight}
+              onChange={(e) => setNewWeight(e.target.value)}
+              className="w-full bg-[#0b0b0e] border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#ff334b] transition"
+            />
+          </div>
 
-        <div>
-          <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">
-            Date
-          </label>
-          <input
-            type="date"
-            required
-            value={logDate}
-            onChange={(e) => setLogDate(e.target.value)}
-            className="w-full bg-[#0b0b0e] border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#ff334b] transition"
-          />
-        </div>
+          <div>
+            <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">
+              Date
+            </label>
+            <input
+              type="date"
+              required
+              value={logDate}
+              onChange={(e) => setLogDate(e.target.value)}
+              className="w-full bg-[#0b0b0e] border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#ff334b] transition"
+            />
+          </div>
 
-        <button
-          type="submit"
-          disabled={saving || loading}
-          className="w-full py-2.5 bg-[#ff334b] hover:bg-[#e02d41] disabled:opacity-50 text-white font-bold text-sm rounded-xl transition shadow-lg shadow-[#ff334b]/20 active:scale-[0.98]"
-        >
-          {saving ? "Saving..." : "+ Log Weight"}
-        </button>
-      </form>
+          <button
+            type="submit"
+            disabled={saving || loading}
+            className="w-full py-2.5 bg-[#ff334b] hover:bg-[#e02d41] disabled:opacity-50 text-white font-bold text-sm rounded-xl transition shadow-lg shadow-[#ff334b]/20 active:scale-[0.98]"
+          >
+            {saving ? "Saving..." : "+ Log Weight"}
+          </button>
+        </form>
+      )}
 
       {/* Historical Interactive SVG Chart */}
       <div className="pt-4 border-t border-zinc-800/60">

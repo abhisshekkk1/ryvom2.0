@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { getOrCreatePublicUser, resolveActiveUserId } from "@/lib/userHelper";
 import WeightTracker from "@/components/WeightTracker";
 import WeightLogger from "@/components/WeightLogger";
+import ManualLiftLogger from "@/components/ManualLiftLogger";
 
 // Fallback default targets
 export const DEFAULT_TARGETS = {
@@ -710,6 +711,33 @@ export default function Dashboard({ user, onNavigateToNutrition, onNavigateToWor
               </div>
             )}
           </div>
+
+          {/* Section: Log New PR Container */}
+          <div className="p-6 sm:p-8 rounded-2xl bg-[#121216] border border-zinc-800/80 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-zinc-800/80 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-xl">
+                  🏆
+                </div>
+                <div>
+                  <h3 className="text-lg font-extrabold text-white tracking-tight">
+                    Log New PR
+                  </h3>
+                  <p className="text-xs text-zinc-400">
+                    Record your heaviest Squat, Bench Press, or Deadlift set to update live profile PRs
+                  </p>
+                </div>
+              </div>
+              <span className="text-[10px] font-extrabold px-2.5 py-1 rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/20 uppercase tracking-wider">
+                Personal Records
+              </span>
+            </div>
+
+            <ManualLiftLogger user={user} />
+          </div>
+
+          {/* Quick Body Weight Logger Section */}
+          <WeightLogger user={user} />
         </>
       )}
     </div>

@@ -37,6 +37,7 @@ export interface DraftSetRow {
 
 interface StrengthTrackerProps {
   user?: any;
+  readOnly?: boolean;
 }
 
 // Powerlifting specific predefined tags
@@ -64,7 +65,7 @@ const LIFT_COLORS: Record<LiftType, { primary: string; bg: string; border: strin
   Deadlift: { primary: "#10b981", bg: "rgba(16, 185, 129, 0.15)", border: "rgba(16, 185, 129, 0.3)", icon: "💀" },
 };
 
-export default function StrengthTracker({ user }: StrengthTrackerProps) {
+export default function StrengthTracker({ user, readOnly = false }: StrengthTrackerProps) {
   // Logs & Loading States
   const [liftLogs, setLiftLogs] = useState<LiftLogEntry[]>([]);
   const [weightLogs, setWeightLogs] = useState<WeightLogEntry[]>([]);
@@ -720,234 +721,236 @@ export default function StrengthTracker({ user }: StrengthTrackerProps) {
       )}
 
       {/* Main Grid: Dynamic Row Logger + Session History */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className={readOnly ? "space-y-6" : "grid grid-cols-1 lg:grid-cols-3 gap-6"}>
         {/* Dynamic Row-by-Row Exercise Logging Interface */}
-        <div id="lift-logging-form" className="p-6 rounded-2xl bg-[#121216] border border-zinc-800/80 shadow-xl space-y-5">
-          {/* Header Block: Exercise Selection & Date */}
-          <div className="border-b border-zinc-800/80 pb-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="text-xl">{LIFT_COLORS[liftType]?.icon || "🏋️‍♂️"}</span>
-                <h3 className="text-base font-extrabold text-white tracking-tight">
-                  Exercise Session Logger
-                </h3>
-              </div>
-              <span className="text-[10px] uppercase tracking-wider font-extrabold px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                Row-by-Row
-              </span>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-1">
-                  Exercise
-                </label>
-                <select
-                  value={liftType}
-                  onChange={(e) => setLiftType(e.target.value as LiftType)}
-                  className="w-full bg-[#0b0b0e] border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white font-bold focus:outline-none focus:border-[#ff334b] transition"
-                >
-                  <option value="Squat">🍗 Squat</option>
-                  <option value="Bench Press">💪 Bench Press</option>
-                  <option value="Deadlift">💀 Deadlift</option>
-                </select>
+        {!readOnly && (
+          <div id="lift-logging-form" className="p-6 rounded-2xl bg-[#121216] border border-zinc-800/80 shadow-xl space-y-5">
+            {/* Header Block: Exercise Selection & Date */}
+            <div className="border-b border-zinc-800/80 pb-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-xl">{LIFT_COLORS[liftType]?.icon || "🏋️‍♂️"}</span>
+                  <h3 className="text-base font-extrabold text-white tracking-tight">
+                    Exercise Session Logger
+                  </h3>
+                </div>
+                <span className="text-[10px] uppercase tracking-wider font-extrabold px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                  Row-by-Row
+                </span>
               </div>
 
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-1">
+                    Exercise
+                  </label>
+                  <select
+                    value={liftType}
+                    onChange={(e) => setLiftType(e.target.value as LiftType)}
+                    className="w-full bg-[#0b0b0e] border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white font-bold focus:outline-none focus:border-[#ff334b] transition"
+                  >
+                    <option value="Squat">🍗 Squat</option>
+                    <option value="Bench Press">💪 Bench Press</option>
+                    <option value="Deadlift">💀 Deadlift</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-1">
+                    Date
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={logDate}
+                    onChange={(e) => setLogDate(e.target.value)}
+                    className="w-full bg-[#0b0b0e] border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#ff334b] transition font-medium"
+                  />
+                </div>
+              </div>
+
+              {/* Tags Selector */}
               <div>
-                <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-1">
-                  Date
+                <label className="block text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                  <span>🏷️ Powerlifting Tags</span>
+                  <span className="text-[10px] text-zinc-500">Multi-select</span>
                 </label>
-                <input
-                  type="date"
-                  required
-                  value={logDate}
-                  onChange={(e) => setLogDate(e.target.value)}
-                  className="w-full bg-[#0b0b0e] border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#ff334b] transition font-medium"
+                <div className="flex flex-wrap gap-1">
+                  {PREDEFINED_TAGS.map((t) => {
+                    const isSelected = selectedTags.includes(t);
+                    return (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => toggleTag(t, selectedTags, setSelectedTags)}
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold transition border ${
+                          isSelected
+                            ? "bg-[#ff334b] text-white border-[#ff334b]"
+                            : "bg-[#0b0b0e] text-zinc-400 border-zinc-800 hover:text-white"
+                        }`}
+                      >
+                        {t}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Session Notes Textarea */}
+              <div>
+                <label className="block text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-1">
+                  📝 Session Notes
+                </label>
+                <textarea
+                  rows={2}
+                  placeholder="e.g. Explosive bar speed, light knee sleeves, good arch."
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  className="w-full bg-[#0b0b0e] border border-zinc-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-[#ff334b] transition resize-none"
                 />
               </div>
             </div>
 
-            {/* Tags Selector */}
-            <div>
-              <label className="block text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-1.5 flex items-center justify-between">
-                <span>🏷️ Powerlifting Tags</span>
-                <span className="text-[10px] text-zinc-500">Multi-select</span>
-              </label>
-              <div className="flex flex-wrap gap-1">
-                {PREDEFINED_TAGS.map((t) => {
-                  const isSelected = selectedTags.includes(t);
+            {/* Mobile-First Spreadsheet Set Rows */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between text-[11px] font-bold text-zinc-400 uppercase tracking-wider px-1">
+                <span>Working Sets ({draftSets.length})</span>
+                <span className="text-[10px] text-emerald-400 font-normal">Check ✓ to mark complete</span>
+              </div>
+
+              {/* Set Rows Header */}
+              <div className="grid grid-cols-12 gap-1.5 text-[10px] font-extrabold text-zinc-500 uppercase tracking-wider px-2 py-1 bg-[#0b0b0e] rounded-lg border border-zinc-800/60">
+                <span className="col-span-1 text-center">SET</span>
+                <span className="col-span-3 text-center">KG</span>
+                <span className="col-span-3 text-center">REPS</span>
+                <span className="col-span-3 text-center">RIR</span>
+                <span className="col-span-2 text-center">DONE</span>
+              </div>
+
+              {/* Set Rows List */}
+              <div className="space-y-2">
+                {draftSets.map((row) => {
+                  const isComplete = row.completed;
+
                   return (
-                    <button
-                      key={t}
-                      type="button"
-                      onClick={() => toggleTag(t, selectedTags, setSelectedTags)}
-                      className={`px-2 py-0.5 rounded text-[10px] font-bold transition border ${
-                        isSelected
-                          ? "bg-[#ff334b] text-white border-[#ff334b]"
-                          : "bg-[#0b0b0e] text-zinc-400 border-zinc-800 hover:text-white"
+                    <div
+                      key={row.id}
+                      className={`grid grid-cols-12 gap-1.5 items-center p-2 rounded-xl border transition ${
+                        isComplete
+                          ? "bg-emerald-950/30 border-emerald-700/60 text-emerald-300 shadow-sm"
+                          : "bg-[#0b0b0e] border-zinc-800 text-white"
                       }`}
                     >
-                      {t}
-                    </button>
+                      {/* Set Number */}
+                      <div className="col-span-1 text-center text-xs font-black">
+                        {row.setNum}
+                      </div>
+
+                      {/* Weight Input */}
+                      <div className="col-span-3">
+                        <input
+                          type="number"
+                          step="0.5"
+                          min="0"
+                          value={row.weightKg}
+                          onChange={(e) => handleUpdateDraftRow(row.id, "weightKg", e.target.value)}
+                          className={`w-full text-center rounded-lg px-1.5 py-1.5 text-xs font-bold transition focus:outline-none ${
+                            isComplete
+                              ? "bg-emerald-900/40 border border-emerald-700/50 text-white"
+                              : "bg-[#121216] border border-zinc-800 text-white focus:border-[#ff334b]"
+                          }`}
+                        />
+                      </div>
+
+                      {/* Reps Input */}
+                      <div className="col-span-3">
+                        <input
+                          type="number"
+                          min="1"
+                          value={row.reps}
+                          onChange={(e) => handleUpdateDraftRow(row.id, "reps", e.target.value)}
+                          className={`w-full text-center rounded-lg px-1.5 py-1.5 text-xs font-bold transition focus:outline-none ${
+                            isComplete
+                              ? "bg-emerald-900/40 border border-emerald-700/50 text-white"
+                              : "bg-[#121216] border border-zinc-800 text-white focus:border-[#ff334b]"
+                          }`}
+                        />
+                      </div>
+
+                      {/* RIR Dropdown */}
+                      <div className="col-span-3">
+                        <select
+                          value={row.rir}
+                          onChange={(e) => handleUpdateDraftRow(row.id, "rir", e.target.value)}
+                          className={`w-full text-center rounded-lg px-1 py-1.5 text-[10px] font-semibold transition focus:outline-none ${
+                            isComplete
+                              ? "bg-emerald-900/40 border border-emerald-700/50 text-emerald-200"
+                              : "bg-[#121216] border border-zinc-800 text-zinc-300 focus:border-[#ff334b]"
+                          }`}
+                        >
+                          {RIR_OPTIONS.map((opt) => (
+                            <option key={opt} value={opt}>
+                              {opt}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Completion Check & Delete Actions */}
+                      <div className="col-span-2 flex items-center justify-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => handleToggleComplete(row.id)}
+                          className={`w-7 h-7 rounded-lg font-bold text-xs flex items-center justify-center transition active:scale-90 border ${
+                            isComplete
+                              ? "bg-emerald-500 text-black border-emerald-400 shadow-md shadow-emerald-500/20"
+                              : "bg-zinc-800 text-zinc-400 border-zinc-700 hover:text-white"
+                          }`}
+                          title={isComplete ? "Mark incomplete" : "Mark completed"}
+                        >
+                          {isComplete ? "✓" : "○"}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteDraftSet(row.id)}
+                          className="p-1 text-[10px] text-zinc-500 hover:text-red-400 transition"
+                          title="Delete set row"
+                        >
+                          🗑️
+                        </button>
+                      </div>
+                    </div>
                   );
                 })}
               </div>
+
+              {/* Add Set Button */}
+              <button
+                type="button"
+                onClick={handleAddDraftSet}
+                className="w-full py-2.5 bg-[#0b0b0e] hover:bg-zinc-800/80 text-zinc-300 hover:text-white font-bold text-xs rounded-xl transition border border-dashed border-zinc-800 hover:border-zinc-700 flex items-center justify-center gap-1.5 active:scale-[0.98]"
+              >
+                <span>➕ Add Set</span>
+              </button>
             </div>
 
-            {/* Session Notes Textarea */}
-            <div>
-              <label className="block text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-1">
-                📝 Session Notes
-              </label>
-              <textarea
-                rows={2}
-                placeholder="e.g. Explosive bar speed, light knee sleeves, good arch."
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                className="w-full bg-[#0b0b0e] border border-zinc-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-[#ff334b] transition resize-none"
-              />
-            </div>
+            {/* Submit Workout Button */}
+            <form onSubmit={handleFinishWorkout} className="pt-2">
+              <button
+                type="submit"
+                disabled={saving || loading}
+                className="w-full py-3.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 disabled:opacity-50 text-white font-bold text-sm rounded-xl transition shadow-lg shadow-emerald-950/30 active:scale-[0.98] flex items-center justify-center gap-2"
+              >
+                <span>{saving ? "Saving Workout..." : `Finish Workout (${draftSets.filter((r) => r.completed).length} Sets)`}</span>
+                <span>✓</span>
+              </button>
+            </form>
           </div>
-
-          {/* Mobile-First Spreadsheet Set Rows */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between text-[11px] font-bold text-zinc-400 uppercase tracking-wider px-1">
-              <span>Working Sets ({draftSets.length})</span>
-              <span className="text-[10px] text-emerald-400 font-normal">Check ✓ to mark complete</span>
-            </div>
-
-            {/* Set Rows Header */}
-            <div className="grid grid-cols-12 gap-1.5 text-[10px] font-extrabold text-zinc-500 uppercase tracking-wider px-2 py-1 bg-[#0b0b0e] rounded-lg border border-zinc-800/60">
-              <span className="col-span-1 text-center">SET</span>
-              <span className="col-span-3 text-center">KG</span>
-              <span className="col-span-3 text-center">REPS</span>
-              <span className="col-span-3 text-center">RIR</span>
-              <span className="col-span-2 text-center">DONE</span>
-            </div>
-
-            {/* Set Rows List */}
-            <div className="space-y-2">
-              {draftSets.map((row) => {
-                const isComplete = row.completed;
-
-                return (
-                  <div
-                    key={row.id}
-                    className={`grid grid-cols-12 gap-1.5 items-center p-2 rounded-xl border transition ${
-                      isComplete
-                        ? "bg-emerald-950/30 border-emerald-700/60 text-emerald-300 shadow-sm"
-                        : "bg-[#0b0b0e] border-zinc-800 text-white"
-                    }`}
-                  >
-                    {/* Set Number */}
-                    <div className="col-span-1 text-center text-xs font-black">
-                      {row.setNum}
-                    </div>
-
-                    {/* Weight Input */}
-                    <div className="col-span-3">
-                      <input
-                        type="number"
-                        step="0.5"
-                        min="0"
-                        value={row.weightKg}
-                        onChange={(e) => handleUpdateDraftRow(row.id, "weightKg", e.target.value)}
-                        className={`w-full text-center rounded-lg px-1.5 py-1.5 text-xs font-bold transition focus:outline-none ${
-                          isComplete
-                            ? "bg-emerald-900/40 border border-emerald-700/50 text-white"
-                            : "bg-[#121216] border border-zinc-800 text-white focus:border-[#ff334b]"
-                        }`}
-                      />
-                    </div>
-
-                    {/* Reps Input */}
-                    <div className="col-span-3">
-                      <input
-                        type="number"
-                        min="1"
-                        value={row.reps}
-                        onChange={(e) => handleUpdateDraftRow(row.id, "reps", e.target.value)}
-                        className={`w-full text-center rounded-lg px-1.5 py-1.5 text-xs font-bold transition focus:outline-none ${
-                          isComplete
-                            ? "bg-emerald-900/40 border border-emerald-700/50 text-white"
-                            : "bg-[#121216] border border-zinc-800 text-white focus:border-[#ff334b]"
-                        }`}
-                      />
-                    </div>
-
-                    {/* RIR Dropdown */}
-                    <div className="col-span-3">
-                      <select
-                        value={row.rir}
-                        onChange={(e) => handleUpdateDraftRow(row.id, "rir", e.target.value)}
-                        className={`w-full text-center rounded-lg px-1 py-1.5 text-[10px] font-semibold transition focus:outline-none ${
-                          isComplete
-                            ? "bg-emerald-900/40 border border-emerald-700/50 text-emerald-200"
-                            : "bg-[#121216] border border-zinc-800 text-zinc-300 focus:border-[#ff334b]"
-                        }`}
-                      >
-                        {RIR_OPTIONS.map((opt) => (
-                          <option key={opt} value={opt}>
-                            {opt}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    {/* Completion Check & Delete Actions */}
-                    <div className="col-span-2 flex items-center justify-center gap-1">
-                      <button
-                        type="button"
-                        onClick={() => handleToggleComplete(row.id)}
-                        className={`w-7 h-7 rounded-lg font-bold text-xs flex items-center justify-center transition active:scale-90 border ${
-                          isComplete
-                            ? "bg-emerald-500 text-black border-emerald-400 shadow-md shadow-emerald-500/20"
-                            : "bg-zinc-800 text-zinc-400 border-zinc-700 hover:text-white"
-                        }`}
-                        title={isComplete ? "Mark incomplete" : "Mark completed"}
-                      >
-                        {isComplete ? "✓" : "○"}
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteDraftSet(row.id)}
-                        className="p-1 text-[10px] text-zinc-500 hover:text-red-400 transition"
-                        title="Delete set row"
-                      >
-                        🗑️
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Add Set Button */}
-            <button
-              type="button"
-              onClick={handleAddDraftSet}
-              className="w-full py-2.5 bg-[#0b0b0e] hover:bg-zinc-800/80 text-zinc-300 hover:text-white font-bold text-xs rounded-xl transition border border-dashed border-zinc-800 hover:border-zinc-700 flex items-center justify-center gap-1.5 active:scale-[0.98]"
-            >
-              <span>➕ Add Set</span>
-            </button>
-          </div>
-
-          {/* Submit Workout Button */}
-          <form onSubmit={handleFinishWorkout} className="pt-2">
-            <button
-              type="submit"
-              disabled={saving || loading}
-              className="w-full py-3.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 disabled:opacity-50 text-white font-bold text-sm rounded-xl transition shadow-lg shadow-emerald-950/30 active:scale-[0.98] flex items-center justify-center gap-2"
-            >
-              <span>{saving ? "Saving Workout..." : `Finish Workout (${draftSets.filter((r) => r.completed).length} Sets)`}</span>
-              <span>✓</span>
-            </button>
-          </form>
-        </div>
+        )}
 
         {/* Grouped Session History View */}
-        <div className="lg:col-span-2 p-6 rounded-2xl bg-[#121216] border border-zinc-800/80 shadow-xl space-y-4">
+        <div className={readOnly ? "p-6 rounded-2xl bg-[#121216] border border-zinc-800/80 shadow-xl space-y-4" : "lg:col-span-2 p-6 rounded-2xl bg-[#121216] border border-zinc-800/80 shadow-xl space-y-4"}>
           <div className="flex items-center justify-between border-b border-zinc-800/80 pb-3">
             <div>
               <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">

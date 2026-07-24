@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import WeightTracker from "@/components/WeightTracker";
+import ProfileSettings from "@/components/ProfileSettings";
 import { resolveActiveUserId, hashPassword } from "@/lib/userHelper";
 
 export default function SettingsPage() {
@@ -555,6 +556,9 @@ export default function SettingsPage() {
             </form>
           )}
         </div>
+
+        {/* Profile Settings UI Component */}
+        <ProfileSettings user={userInfo} />
 
         {/* Card 2: Public Link-in-Bio Portfolio Profile */}
         <div className="p-6 sm:p-8 rounded-2xl bg-[#121216] border border-zinc-800/80 shadow-2xl space-y-6">
