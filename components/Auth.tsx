@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { createBrowserClient } from "@supabase/ssr";
 import { supabase } from "@/lib/supabase";
 import { hashPassword, getOrCreatePublicUser } from "@/lib/userHelper";
 
@@ -35,7 +36,7 @@ export default function Auth({ onLoginSuccess }: { onLoginSuccess?: (user: any) 
   const [googleLoading, setGoogleLoading] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
-  // Handle Google OAuth Sign In with Auth Callback URL
+  // Handle Google OAuth Sign In using @supabase/ssr createBrowserClient
   const handleGoogleSignIn = async () => {
     setGoogleLoading(true);
     setMessage(null);
@@ -46,15 +47,15 @@ export default function Auth({ onLoginSuccess }: { onLoginSuccess?: (user: any) 
         localStorage.setItem("ryvom_remember_me", "true");
       }
 
-      const redirectUrl =
-        typeof window !== "undefined"
-          ? `${window.location.origin}/auth/callback`
-          : undefined;
+      const supabaseBrowser = createBrowserClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL || "https://kfhwmkmxxdzgeeyuxizx.supabase.co",
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "sb_publishable_mK-ZCLEZoRQNVMpHRuyjhw_3Cb8zyg7"
+      );
 
-      const { error } = await supabase.auth.signInWithOAuth({
+      const { error } = await supabaseBrowser.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: redirectUrl,
+          redirectTo: `${location.origin}/auth/callback`,
         },
       });
 
