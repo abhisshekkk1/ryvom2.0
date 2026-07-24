@@ -67,8 +67,19 @@ export default function Home() {
 
   const handleSignOut = async () => {
     localStorage.removeItem("ryvom_user");
+    sessionStorage.removeItem("ryvom_user");
+    localStorage.removeItem("ryvom_remember_me");
+    sessionStorage.removeItem("ryvom_remember_me");
+
+    // Clear document cookies for middleware redirection
+    if (typeof document !== "undefined") {
+      document.cookie = "ryvom_user=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+      document.cookie = "ryvom_remember_me=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+    }
+
     await supabase.auth.signOut();
     setUser(null);
+    window.location.href = "/login";
   };
 
   const handleCalculateAndLog = async (e: React.FormEvent) => {
