@@ -35,7 +35,7 @@ export default function Auth({ onLoginSuccess }: { onLoginSuccess?: (user: any) 
   const [googleLoading, setGoogleLoading] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
-  // Handle Google OAuth Sign In
+  // Handle Google OAuth Sign In with Auth Callback URL
   const handleGoogleSignIn = async () => {
     setGoogleLoading(true);
     setMessage(null);
@@ -46,10 +46,15 @@ export default function Auth({ onLoginSuccess }: { onLoginSuccess?: (user: any) 
         localStorage.setItem("ryvom_remember_me", "true");
       }
 
+      const redirectUrl =
+        typeof window !== "undefined"
+          ? `${window.location.origin}/auth/callback`
+          : undefined;
+
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: typeof window !== "undefined" ? window.location.origin : undefined,
+          redirectTo: redirectUrl,
         },
       });
 
