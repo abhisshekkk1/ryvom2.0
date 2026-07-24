@@ -2,11 +2,13 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import WeightTracker from "@/components/WeightTracker";
 import { resolveActiveUserId, hashPassword } from "@/lib/userHelper";
 
 export default function SettingsPage() {
+  const router = useRouter();
   const [activeUserId, setActiveUserId] = useState<string | null>(null);
   const [rowId, setRowId] = useState<string | null>(null);
   const [userInfo, setUserInfo] = useState<{ username: string; email: string; role: string }>({
@@ -27,6 +29,13 @@ export default function SettingsPage() {
   const [manualProtein, setManualProtein] = useState<number>(180);
   const [manualCarbs, setManualCarbs] = useState<number>(150);
   const [manualFats, setManualFats] = useState<number>(60);
+
+  // Public Link-In-Bio Portfolio States
+  const [publicUsername, setPublicUsername] = useState<string>("athlete");
+  const [bio, setBio] = useState<string>("Documenting the journey from 140kg to 100kg");
+  const [instagramUrl, setInstagramUrl] = useState<string>("https://instagram.com");
+  const [youtubeUrl, setYoutubeUrl] = useState<string>("https://youtube.com");
+  const [mediumUrl, setMediumUrl] = useState<string>("https://medium.com");
 
   // Account Security States
   const [newPassword, setNewPassword] = useState<string>("");
@@ -137,8 +146,9 @@ export default function SettingsPage() {
           }
         }
 
-        // 2. Fetch latest saved settings from Supabase user_settings table
+        // 2. Fetch latest saved settings from Supabase user_settings table for active user
         let query = supabase.from("user_settings").select("*");
+        if (uid) query = query.eq("user_id", uid);
         const { data, error } = await query.limit(1).maybeSingle();
         if (error) console.error("Error loading user settings:", error);
 
@@ -147,6 +157,12 @@ export default function SettingsPage() {
           setManualProtein(Number(data.target_protein) || 180);
           setManualCarbs(Number(data.target_carbs) || 150);
           setManualFats(Number(data.target_fats) || 60);
+          if (data.goal_weight) setGoalWeightKg(Number(data.goal_weight));
+          if (data.username) setPublicUsername(data.username);
+          if (data.bio) setBio(data.bio);
+          if (data.instagram_url) setInstagramUrl(data.instagram_url);
+          if (data.youtube_url) setYoutubeUrl(data.youtube_url);
+          if (data.medium_url) setMediumUrl(data.medium_url);
         }
 
         // 3. Fetch latest logged weight from progress/weight_logs so bodyWeightKg defaults to actual latest weight
@@ -180,12 +196,19 @@ export default function SettingsPage() {
     const uid = activeUserId || (await resolveActiveUserId());
     setActiveUserId(uid);
 
-    // Save valid columns to Supabase user_settings
+    // Save valid columns to Supabase user_settings including public profile fields
     const payload: any = {
+      user_id: uid || null,
       target_calories: activeCalories,
       target_protein: activeProtein,
       target_carbs: activeCarbs,
       target_fats: activeFats,
+      goal_weight: goalWeightKg,
+      username: publicUsername.toLowerCase().trim().replace(/[^a-z0-9_-]/g, ""),
+      bio: bio.trim(),
+      instagram_url: instagramUrl.trim(),
+      youtube_url: youtubeUrl.trim(),
+      medium_url: mediumUrl.trim(),
     };
 
     try {
@@ -226,6 +249,9 @@ export default function SettingsPage() {
           })
         );
       }
+
+      // Refresh router so server cache / app router state updates instantly
+      router.refresh();
 
       setSuccessMessage(`✓ Dynamic target settings (${activeCalories} kcal) saved to profile!`);
       setTimeout(() => setSuccessMessage(null), 4000);
@@ -530,7 +556,112 @@ export default function SettingsPage() {
           )}
         </div>
 
-        {/* Card 2: Weight Tracker & Historical Chart Section */}
+        {/* Card 2: Public Link-in-Bio Portfolio Profile */}
+        <div className="p-6 sm:p-8 rounded-2xl bg-[#121216] border border-zinc-800/80 shadow-2xl space-y-6">
+          <div className="flex items-center gap-3 border-b border-zinc-800/80 pb-4">
+            <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-xl">
+              🌐
+            </div>
+            <div>
+              <h2 className="text-xl font-extrabold text-white tracking-tight">
+                Public "Link-in-Bio" Portfolio Profile
+              </h2>
+              <p className="text-xs text-zinc-400">
+                Share your live strength PRs, body weight progress, and social links at <span className="text-purple-400 font-bold">/{publicUsername || "username"}</span>
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div>
+              <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-1.5">
+                Public Handle / URL Path
+              </label>
+              <div className="flex items-center">
+                <span className="bg-[#0b0b0e] border border-r-0 border-zinc-800 rounded-l-xl px-3 py-2.5 text-xs text-zinc-500 font-bold">
+                  ryvom.app/
+                </span>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. athlete"
+                  value={publicUsername}
+                  onChange={(e) => setPublicUsername(e.target.value)}
+                  className="flex-1 bg-[#0b0b0e] border border-zinc-800 rounded-r-xl px-4 py-2.5 text-sm text-white font-bold focus:outline-none focus:border-purple-500 transition"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-1.5">
+                Public Bio / Headline
+              </label>
+              <textarea
+                rows={2}
+                placeholder="e.g. Documenting the journey from 140kg to 100kg"
+                value={bio}
+                onChange={(e) => setBio(e.target.value)}
+                className="w-full bg-[#0b0b0e] border border-zinc-800 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-purple-500 transition resize-none"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-1">
+                  📸 Instagram URL
+                </label>
+                <input
+                  type="url"
+                  placeholder="https://instagram.com/yourhandle"
+                  value={instagramUrl}
+                  onChange={(e) => setInstagramUrl(e.target.value)}
+                  className="w-full bg-[#0b0b0e] border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-purple-500 transition"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-1">
+                  ▶️ YouTube URL
+                </label>
+                <input
+                  type="url"
+                  placeholder="https://youtube.com/@channel"
+                  value={youtubeUrl}
+                  onChange={(e) => setYoutubeUrl(e.target.value)}
+                  className="w-full bg-[#0b0b0e] border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-purple-500 transition"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-1">
+                  ✍️ Medium / Blog URL
+                </label>
+                <input
+                  type="url"
+                  placeholder="https://medium.com/@blog"
+                  value={mediumUrl}
+                  onChange={(e) => setMediumUrl(e.target.value)}
+                  className="w-full bg-[#0b0b0e] border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-purple-500 transition"
+                />
+              </div>
+            </div>
+
+            {publicUsername && (
+              <div className="pt-2 text-right">
+                <Link
+                  href={`/${publicUsername}`}
+                  target="_blank"
+                  className="inline-flex items-center gap-1 text-xs font-bold text-purple-400 hover:text-purple-300 underline"
+                >
+                  <span>View Live Public Profile</span>
+                  <span>→</span>
+                </Link>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Card 3: Weight Tracker & Historical Chart Section */}
         <WeightTracker user={userInfo} goalWeight={goalWeightKg} onWeightUpdated={(w) => setBodyWeightKg(w)} />
 
         {/* Card 3: User Profile & Account Management */}

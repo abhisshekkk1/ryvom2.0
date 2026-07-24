@@ -5,13 +5,15 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import Auth from "@/components/Auth";
 import Dashboard from "@/components/Dashboard";
+import StrengthTracker from "@/components/StrengthTracker";
+import RecipeBuilder from "@/components/RecipeBuilder";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { getOrCreatePublicUser, fileToBase64 } from "@/lib/userHelper";
 
 export default function Home() {
   const [user, setUser] = useState<any>(null);
   const [authLoading, setAuthLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"dashboard" | "workouts" | "nutrition">("dashboard");
+  const [activeTab, setActiveTab] = useState<"dashboard" | "workouts" | "strength" | "nutrition" | "recipes">("dashboard");
 
   // Nutrition states
   const [mealName, setMealName] = useState("Breakfast");
@@ -189,8 +191,13 @@ export default function Home() {
             user={user}
             onNavigateToNutrition={() => setActiveTab("nutrition")}
             onNavigateToWorkouts={() => setActiveTab("workouts")}
+            onNavigateToStrength={() => setActiveTab("strength")}
           />
         );
+      case "strength":
+        return <StrengthTracker user={user} />;
+      case "recipes":
+        return <RecipeBuilder user={user} />;
       case "workouts":
         return (
           <div className="p-8 rounded-2xl bg-[#121216] border border-zinc-800/50 shadow-xl text-center space-y-3">
@@ -373,6 +380,16 @@ export default function Home() {
               Workouts
             </button>
             <button
+              onClick={() => setActiveTab("strength")}
+              className={`px-4 py-2 rounded-xl text-sm font-semibold transition ${
+                activeTab === "strength"
+                  ? "bg-zinc-800/50 text-white"
+                  : "text-zinc-400 hover:text-zinc-200"
+              }`}
+            >
+              Strength
+            </button>
+            <button
               onClick={() => setActiveTab("nutrition")}
               className={`px-4 py-2 rounded-xl text-sm font-semibold transition ${
                 activeTab === "nutrition"
@@ -382,6 +399,22 @@ export default function Home() {
             >
               Nutrition
             </button>
+            <button
+              onClick={() => setActiveTab("recipes")}
+              className={`px-4 py-2 rounded-xl text-sm font-semibold transition ${
+                activeTab === "recipes"
+                  ? "bg-zinc-800/50 text-white"
+                  : "text-zinc-400 hover:text-zinc-200"
+              }`}
+            >
+              Recipes
+            </button>
+            <Link
+              href="/analytics"
+              className="px-4 py-2 rounded-xl text-sm font-semibold text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/30 transition"
+            >
+              Analytics
+            </Link>
             <Link
               href="/settings"
               className="px-4 py-2 rounded-xl text-sm font-semibold text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/30 transition"

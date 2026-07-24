@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { getOrCreatePublicUser, resolveActiveUserId } from "@/lib/userHelper";
+import WeightTracker from "@/components/WeightTracker";
+import WeightLogger from "@/components/WeightLogger";
 
 // Fallback default targets
 export const DEFAULT_TARGETS = {
@@ -95,11 +97,14 @@ interface DashboardProps {
   user: any;
   onNavigateToNutrition?: () => void;
   onNavigateToWorkouts?: () => void;
+  onNavigateToStrength?: () => void;
 }
 
-export default function Dashboard({ user, onNavigateToNutrition, onNavigateToWorkouts }: DashboardProps) {
+export default function Dashboard({ user, onNavigateToNutrition, onNavigateToWorkouts, onNavigateToStrength }: DashboardProps) {
   const [todayMeals, setTodayMeals] = useState<MealLog[]>([]);
   const [targets, setTargets] = useState<UserSettings>(DEFAULT_TARGETS);
+  const [goalWeight, setGoalWeight] = useState<number>(72.0);
+  const [stapleRecipes, setStapleRecipes] = useState<StapleMeal[]>(STAPLE_MEALS);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
@@ -118,40 +123,48 @@ export default function Dashboard({ user, onNavigateToNutrition, onNavigateToWor
     try {
       const targetUserId = await resolveActiveUserId(user);
 
-      // 1. Fetch dynamic user target goals from user_settings table
-      const { data: dbSet } = await supabase
-        .from("user_settings")
-        .select("*")
-        .limit(1)
-        .maybeSingle();
+      // 1. Fetch dynamic user target goals & goal_weight explicitly from user_settings table for authenticated user
+      let setQuery = supabase.from("user_settings").select("*");
+      if (targetUserId) {
+        setQuery = setQuery.eq("user_id", targetUserId);
+      }
+      const { data: dbSet } = await setQuery.limit(1).maybeSingle();
       const settingsData = dbSet;
 
-      // Check localStorage for ryvom_user_settings override
-      let localTargets = null;
+      // Check localStorage for ryvom_user_settings override as secondary fallback
+      let localTargets: any = null;
       if (typeof window !== "undefined") {
         const s = localStorage.getItem("ryvom_user_settings");
         if (s) {
           try {
             const parsed = JSON.parse(s);
-            if (parsed.target_calories) localTargets = parsed;
+            if (parsed.target_calories || parsed.goal_weight) localTargets = parsed;
           } catch (e) {}
         }
       }
 
-      if (localTargets) {
-        setTargets({
-          target_calories: Number(localTargets.target_calories) || DEFAULT_TARGETS.target_calories,
-          target_protein: Number(localTargets.target_protein) || DEFAULT_TARGETS.target_protein,
-          target_carbs: Number(localTargets.target_carbs) || DEFAULT_TARGETS.target_carbs,
-          target_fats: Number(localTargets.target_fats) || DEFAULT_TARGETS.target_fats,
-        });
-      } else if (settingsData) {
+      if (settingsData) {
         setTargets({
           target_calories: Number(settingsData.target_calories) || DEFAULT_TARGETS.target_calories,
           target_protein: Number(settingsData.target_protein) || DEFAULT_TARGETS.target_protein,
           target_carbs: Number(settingsData.target_carbs) || DEFAULT_TARGETS.target_carbs,
           target_fats: Number(settingsData.target_fats) || DEFAULT_TARGETS.target_fats,
         });
+        if (settingsData.goal_weight) {
+          setGoalWeight(Number(settingsData.goal_weight));
+        } else if (localTargets?.goal_weight) {
+          setGoalWeight(Number(localTargets.goal_weight));
+        }
+      } else if (localTargets) {
+        setTargets({
+          target_calories: Number(localTargets.target_calories) || DEFAULT_TARGETS.target_calories,
+          target_protein: Number(localTargets.target_protein) || DEFAULT_TARGETS.target_protein,
+          target_carbs: Number(localTargets.target_carbs) || DEFAULT_TARGETS.target_carbs,
+          target_fats: Number(localTargets.target_fats) || DEFAULT_TARGETS.target_fats,
+        });
+        if (localTargets.goal_weight) {
+          setGoalWeight(Number(localTargets.goal_weight));
+        }
       } else {
         setTargets(DEFAULT_TARGETS);
       }
@@ -159,6 +172,28 @@ export default function Dashboard({ user, onNavigateToNutrition, onNavigateToWor
       if (!targetUserId) {
         setLoading(false);
         return;
+      }
+
+      // 2. Fetch custom staple_recipes from Supabase
+      let rQuery = supabase.from("staple_recipes").select("*");
+      if (targetUserId) rQuery = rQuery.eq("user_id", targetUserId);
+      const { data: recipeData } = await rQuery.order("created_at", { ascending: false });
+
+      if (recipeData && recipeData.length > 0) {
+        const formatted: StapleMeal[] = recipeData.map((r: any) => ({
+          id: r.id,
+          name: r.meal_category || "Lunch",
+          food_item: r.recipe_name,
+          weight_g: 250,
+          calories: Number(r.calories),
+          protein: Number(r.protein),
+          carbs: Number(r.carbs),
+          fats: Number(r.fat || r.fats),
+          icon: r.icon || "🥗",
+        }));
+        setStapleRecipes(formatted);
+      } else {
+        setStapleRecipes(STAPLE_MEALS);
       }
 
       // 2. Calculate start and end of today in local timezone
@@ -188,6 +223,9 @@ export default function Dashboard({ user, onNavigateToNutrition, onNavigateToWor
 
   useEffect(() => {
     fetchDashboardData();
+    const handleFocus = () => fetchDashboardData();
+    window.addEventListener("focus", handleFocus);
+    return () => window.removeEventListener("focus", handleFocus);
   }, [fetchDashboardData]);
 
   // Delete logged meal item handler
@@ -379,6 +417,41 @@ export default function Dashboard({ user, onNavigateToNutrition, onNavigateToWor
 
   return (
     <div className="space-y-6">
+      {/* Quick Weight Logger Component */}
+      <WeightLogger user={user} onWeightLogged={fetchDashboardData} />
+
+      {/* Quick Action Navigation Banners */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Weight Tracker Component embedded */}
+        <WeightTracker user={user} goalWeight={goalWeight} />
+
+        {/* Strength & Lift Tracking Quick Card */}
+        <div className="p-6 rounded-2xl bg-[#121216] border border-zinc-800/80 shadow-xl flex flex-col justify-between space-y-4">
+          <div>
+            <div className="flex items-center justify-between">
+              <span className="text-3xl">🏋️‍♂️</span>
+              <span className="text-[10px] uppercase tracking-wider font-extrabold px-2.5 py-1 rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                Powerlifting Module
+              </span>
+            </div>
+            <h3 className="text-lg font-extrabold text-white mt-3">Strength & Lift Tracking</h3>
+            <p className="text-xs text-zinc-400 mt-1">
+              Log Squat, Bench Press, and Deadlift sets. Track 1RM progression and monitor strength retention during calorie deficits.
+            </p>
+          </div>
+
+          {onNavigateToStrength && (
+            <button
+              onClick={onNavigateToStrength}
+              className="w-full py-3 bg-gradient-to-r from-[#ff334b] to-[#ff5b6e] hover:from-[#e02d41] hover:to-[#e04558] text-white font-bold text-xs rounded-xl transition shadow-lg shadow-[#ff334b]/20 active:scale-[0.98] flex items-center justify-center gap-2"
+            >
+              <span>Go to Strength Module</span>
+              <span>→</span>
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* Header Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-6 rounded-2xl bg-[#121216] border border-zinc-800/80 shadow-xl">
         <div>
@@ -478,7 +551,7 @@ export default function Dashboard({ user, onNavigateToNutrition, onNavigateToWor
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-              {STAPLE_MEALS.map((staple) => {
+              {stapleRecipes.map((staple) => {
                 const isAdding = addingStapleId === staple.id;
                 return (
                   <button

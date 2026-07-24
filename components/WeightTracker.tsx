@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { toPng } from "html-to-image";
 import { supabase } from "@/lib/supabase";
 import { getOrCreatePublicUser, resolveActiveUserId } from "@/lib/userHelper";
 
@@ -26,8 +27,37 @@ export default function WeightTracker({ user, goalWeight = 72.0, onWeightUpdated
 
   const [loading, setLoading] = useState<boolean>(true);
   const [saving, setSaving] = useState<boolean>(false);
+  const [exporting, setExporting] = useState<boolean>(false);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const chartRef = useRef<HTMLDivElement>(null);
+
+  // Export Chart to Image Handler using html-to-image
+  const handleExportChart = async () => {
+    if (!chartRef.current) return;
+    setExporting(true);
+    try {
+      const dataUrl = await toPng(chartRef.current, {
+        cacheBust: true,
+        backgroundColor: "#0b0b0e",
+        filter: (node) => {
+          if (node.classList && node.classList.contains("no-export")) {
+            return false;
+          }
+          return true;
+        },
+      });
+      const link = document.createElement("a");
+      link.download = `ryvom-progress-export.png`;
+      link.href = dataUrl;
+      link.click();
+    } catch (err) {
+      console.error("Export chart error:", err);
+    } finally {
+      setExporting(false);
+    }
+  };
 
   // Fetch weight logs from Supabase with user_id binding
   const fetchWeightLogs = useCallback(async () => {
@@ -233,22 +263,35 @@ export default function WeightTracker({ user, goalWeight = 72.0, onWeightUpdated
           </p>
         </div>
 
-        {/* Time Range Filter Buttons */}
-        <div className="flex items-center gap-1 bg-[#0b0b0e] p-1 rounded-xl border border-zinc-800 self-start sm:self-auto">
-          {(["1M", "3M", "6M", "1Y", "ALL"] as TimeRange[]).map((r) => (
-            <button
-              key={r}
-              type="button"
-              onClick={() => setTimeRange(r)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${
-                timeRange === r
-                  ? "bg-[#ff334b] text-white shadow-md"
-                  : "text-zinc-400 hover:text-zinc-200"
-              }`}
-            >
-              {r}
-            </button>
-          ))}
+        {/* Time Range Filter Buttons & Export Button */}
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          <div className="flex items-center gap-1 bg-[#0b0b0e] p-1 rounded-xl border border-zinc-800">
+            {(["1M", "3M", "6M", "1Y", "ALL"] as TimeRange[]).map((r) => (
+              <button
+                key={r}
+                type="button"
+                onClick={() => setTimeRange(r)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${
+                  timeRange === r
+                    ? "bg-[#ff334b] text-white shadow-md"
+                    : "text-zinc-400 hover:text-zinc-200"
+                }`}
+              >
+                {r}
+              </button>
+            ))}
+          </div>
+
+          <button
+            type="button"
+            onClick={handleExportChart}
+            disabled={exporting || loading}
+            className="px-3 py-2 rounded-xl text-xs font-bold bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700/60 transition flex items-center gap-1.5 active:scale-95 disabled:opacity-50 no-export"
+            title="Export chart as PNG for social sharing"
+          >
+            <span>📸</span>
+            <span>{exporting ? "Exporting..." : "Export Image"}</span>
+          </button>
         </div>
       </div>
 
@@ -363,7 +406,18 @@ export default function WeightTracker({ user, goalWeight = 72.0, onWeightUpdated
             Loading chart data...
           </div>
         ) : (
-          <div className="relative bg-[#0b0b0e] border border-zinc-800/80 rounded-xl p-4 overflow-hidden">
+          <div ref={chartRef} className="relative bg-[#0b0b0e] border border-zinc-800/80 rounded-xl p-5 overflow-hidden space-y-3">
+            {/* Branded Watermark Header for Image Export */}
+            <div className="flex items-center justify-between text-xs border-b border-zinc-800/80 pb-2">
+              <div className="flex items-center gap-2">
+                <span className="w-5 h-5 rounded bg-[#ff334b] text-white font-black text-[10px] flex items-center justify-center">R</span>
+                <span className="font-extrabold text-white tracking-wider text-xs">RYVOM APP • WEIGHT PROGRESS TREND</span>
+              </div>
+              <span className="text-[10px] font-bold text-rose-400">
+                Latest: {currentWeight} kg {goalWeight ? `(Target: ${goalWeight} kg)` : ""}
+              </span>
+            </div>
+
             {/* SVG Line, Goal Reference Line & Gradient Fill */}
             <svg viewBox="0 0 300 150" className="w-full h-44 overflow-visible preserve-3d">
               <defs>
@@ -437,6 +491,11 @@ export default function WeightTracker({ user, goalWeight = 72.0, onWeightUpdated
               <span>{chartData.points[0]?.formattedDate || ""}</span>
               <span>{chartData.points[Math.floor(chartData.points.length / 2)]?.formattedDate || ""}</span>
               <span>{chartData.points[chartData.points.length - 1]?.formattedDate || ""}</span>
+            </div>
+
+            {/* Custom Social Watermark */}
+            <div className="absolute bottom-2.5 right-4 text-[11px] font-black text-white/50 tracking-widest uppercase pointer-events-none select-none">
+              @Ryvom
             </div>
           </div>
         )}
