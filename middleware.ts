@@ -24,8 +24,8 @@ export async function middleware(request: NextRequest) {
     return response;
   }
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://kfhwmkmxxdzgeeyuxizx.supabase.co";
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "sb_publishable_mK-ZCLEZoRQNVMpHRuyjhw_3Cb8zyg7";
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
   const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
     cookies: {
@@ -49,11 +49,7 @@ export async function middleware(request: NextRequest) {
     data: { session },
   } = await supabase.auth.getSession();
 
-  // Check for ryvom_user or ryvom_remember_me cookie
-  const ryvomUserCookie = request.cookies.get("ryvom_user")?.value;
-  const ryvomRememberCookie = request.cookies.get("ryvom_remember_me")?.value;
-
-  const isAuthenticated = Boolean(session || ryvomUserCookie || ryvomRememberCookie);
+  const isAuthenticated = Boolean(session);
 
   // If user is unauthenticated and attempting to access a protected route, redirect to /login
   if (!isAuthenticated && pathname !== "/login") {

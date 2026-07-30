@@ -28,19 +28,6 @@ export default function Home() {
   const [nutritionSuccess, setNutritionSuccess] = useState<string | null>(null);
 
   useEffect(() => {
-    // 1. Check local storage for ryvom_user
-    const localRyvom = localStorage.getItem("ryvom_user");
-    if (localRyvom) {
-      try {
-        setUser(JSON.parse(localRyvom));
-        setAuthLoading(false);
-        return;
-      } catch (e) {
-        localStorage.removeItem("ryvom_user");
-      }
-    }
-
-    // 2. Check active Supabase Auth session & sync to public.users
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session?.user) {
         const publicUser = await getOrCreatePublicUser(session.user);
@@ -51,12 +38,11 @@ export default function Home() {
       setAuthLoading(false);
     });
 
-    // Listen for auth state shifts
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (session?.user) {
         const publicUser = await getOrCreatePublicUser(session.user);
         setUser(publicUser || session.user);
-      } else if (!localStorage.getItem("ryvom_user")) {
+      } else {
         setUser(null);
       }
       setAuthLoading(false);
@@ -66,17 +52,6 @@ export default function Home() {
   }, []);
 
   const handleSignOut = async () => {
-    localStorage.removeItem("ryvom_user");
-    sessionStorage.removeItem("ryvom_user");
-    localStorage.removeItem("ryvom_remember_me");
-    sessionStorage.removeItem("ryvom_remember_me");
-
-    // Clear document cookies for middleware redirection
-    if (typeof document !== "undefined") {
-      document.cookie = "ryvom_user=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
-      document.cookie = "ryvom_remember_me=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
-    }
-
     await supabase.auth.signOut();
     setUser(null);
     window.location.href = "/login";

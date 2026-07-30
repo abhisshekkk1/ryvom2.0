@@ -6,11 +6,10 @@ interface PublicProfileProps {
 }
 
 export interface PublicProfileData {
-  id: string;
-  user_id?: string;
+  user_id: string;
+  id?: string;
   username: string;
   bio?: string;
-  instagram_url?: string;
   youtube_url?: string;
   medium_url?: string;
 }
@@ -27,7 +26,7 @@ export default async function PublicProfilePage(props: PublicProfileProps) {
   try {
     const { data, error } = await supabase
       .from("user_settings")
-      .select("*")
+      .select("user_id, username, bio, youtube_url, medium_url")
       .ilike("username", cleanUsername)
       .maybeSingle();
 
@@ -248,20 +247,8 @@ export default async function PublicProfilePage(props: PublicProfileProps) {
         </section>
 
         {/* SECTION 2: SOCIALS (Icon link buttons) */}
-        {(profile.instagram_url || profile.youtube_url || profile.medium_url) && (
+        {(profile.youtube_url || profile.medium_url) && (
           <section className="flex flex-wrap items-center justify-center gap-3">
-            {profile.instagram_url && (
-              <a
-                href={profile.instagram_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-4 py-2.5 rounded-xl bg-[#121216] hover:bg-zinc-800 border border-zinc-800 text-xs font-bold text-zinc-300 hover:text-white transition flex items-center gap-2 shadow-md active:scale-95"
-              >
-                <span>📸</span>
-                <span>Instagram</span>
-              </a>
-            )}
-
             {profile.youtube_url && (
               <a
                 href={profile.youtube_url}

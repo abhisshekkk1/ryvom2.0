@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { toPng } from "html-to-image";
 import { supabase } from "@/lib/supabase";
-import { getOrCreatePublicUser, resolveActiveUserId } from "@/lib/userHelper";
+import { resolveActiveUserId } from "@/lib/userHelper";
 
 export type TimeRange = "1M" | "3M" | "6M" | "1Y" | "ALL";
 

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
-import { getOrCreatePublicUser, resolveActiveUserId } from "@/lib/userHelper";
+import { resolveActiveUserId } from "@/lib/userHelper";
 import WeightTracker from "@/components/WeightTracker";
 import WeightLogger from "@/components/WeightLogger";
 import ManualLiftLogger from "@/components/ManualLiftLogger";
@@ -76,6 +76,7 @@ export const STAPLE_MEALS: StapleMeal[] = [
 ];
 
 interface UserSettings {
+  user_id?: string;
   target_calories: number;
   target_protein: number;
   target_carbs: number;
@@ -125,7 +126,7 @@ export default function Dashboard({ user, onNavigateToNutrition, onNavigateToWor
       const targetUserId = await resolveActiveUserId(user);
 
       // 1. Fetch dynamic user target goals & goal_weight explicitly from user_settings table for authenticated user
-      let setQuery = supabase.from("user_settings").select("*");
+      let setQuery = supabase.from("user_settings").select("user_id, target_calories, target_protein, target_carbs, target_fats, goal_weight");
       if (targetUserId) {
         setQuery = setQuery.eq("user_id", targetUserId);
       }

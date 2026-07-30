@@ -21,7 +21,7 @@ export function fileToBase64(file: File): Promise<{ base64Data: string; mimeType
   });
 }
 
-export async function getOrCreatePublicUser(sessionUser: any): Promise<{
+export async function getOrCreatePublicUser(sessionUser: { id?: string; email?: string; username?: string; } | null | undefined): Promise<{
   id: string;
   username: string;
   role: string;
@@ -99,17 +99,7 @@ export async function getOrCreatePublicUser(sessionUser: any): Promise<{
   return sessionUser.id ? { id: sessionUser.id, username: newUsername, role: "client" } : null;
 }
 
-export async function resolveActiveUserId(userProp?: any): Promise<string | null> {
-  if (typeof window !== "undefined") {
-    const localRyvom = localStorage.getItem("ryvom_user");
-    if (localRyvom) {
-      try {
-        const parsed = JSON.parse(localRyvom);
-        if (parsed?.id) return parsed.id;
-      } catch (e) {}
-    }
-  }
-
+export async function resolveActiveUserId(userProp?: { id?: string; email?: string; username?: string; } | null): Promise<string | null> {
   if (userProp) {
     const publicUser = await getOrCreatePublicUser(userProp);
     if (publicUser?.id) return publicUser.id;

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 import { supabase } from "@/lib/supabase";
-import { hashPassword, getOrCreatePublicUser } from "@/lib/userHelper";
+import { getOrCreatePublicUser } from "@/lib/userHelper";
 
 // Modern SVG Icon for Google OAuth Button
 const GoogleIcon = () => (
@@ -48,8 +48,8 @@ export default function Auth({ onLoginSuccess }: { onLoginSuccess?: (user: any) 
       }
 
       const supabaseBrowser = createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL || "https://kfhwmkmxxdzgeeyuxizx.supabase.co",
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "sb_publishable_mK-ZCLEZoRQNVMpHRuyjhw_3Cb8zyg7"
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
       );
 
       const { error } = await supabaseBrowser.auth.signInWithOAuth({
@@ -108,36 +108,6 @@ export default function Auth({ onLoginSuccess }: { onLoginSuccess?: (user: any) 
           setMessage({ type: "success", text: "Sign up successful! Please check your email or sign in." });
         }
       } else {
-        // 1. First check custom public.users table (prototype database logic)
-        const usernameClean = identifier.includes("@") ? identifier.split("@")[0].toLowerCase() : identifier.toLowerCase();
-        const hashedInput = await hashPassword(password);
-
-        const { data: customUsers } = await supabase
-          .from("users")
-          .select("id, username, password_hash, role")
-          .or(`username.eq.${usernameClean},username.eq.${identifier.toLowerCase()}`);
-
-        if (customUsers && customUsers.length > 0) {
-          const matchedUser = customUsers.find(
-            (u) => u.password_hash === hashedInput || u.password_hash === password
-          );
-
-          if (matchedUser) {
-            const userObj = {
-              id: matchedUser.id,
-              username: matchedUser.username,
-              role: matchedUser.role,
-              email: `${matchedUser.username}@ryvom.local`,
-            };
-            activeStorage.setItem("ryvom_user", JSON.stringify(userObj));
-            setMessage({ type: "success", text: "Logged in successfully!" });
-            if (onLoginSuccess) onLoginSuccess(userObj);
-            window.location.reload();
-            return;
-          }
-        }
-
-        // 2. Fallback to Supabase Auth
         const { error, data } = await supabase.auth.signInWithPassword({
           email: identifier,
           password,

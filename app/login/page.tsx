@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import Image from "next/image";
 import { createBrowserClient } from "@supabase/ssr";
 import { supabase } from "@/lib/supabase";
-import { hashPassword, getOrCreatePublicUser } from "@/lib/userHelper";
+import { getOrCreatePublicUser } from "@/lib/userHelper";
 
 // Official Google Color SVG Icon
 const GoogleIcon = () => (
@@ -63,8 +63,8 @@ export default function LoginPage() {
       }
 
       const supabaseBrowser = createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL || "https://kfhwmkmxxdzgeeyuxizx.supabase.co",
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "sb_publishable_mK-ZCLEZoRQNVMpHRuyjhw_3Cb8zyg7"
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
       );
 
       const { error } = await supabaseBrowser.auth.signInWithOAuth({
@@ -108,44 +108,6 @@ export default function LoginPage() {
     }
 
     try {
-      // 1. First attempt login against custom users database table
-      const usernameClean = identifier.includes("@")
-        ? identifier.split("@")[0].toLowerCase()
-        : identifier.toLowerCase();
-      const hashedInput = await hashPassword(password);
-
-      const { data: customUsers } = await supabase
-        .from("users")
-        .select("id, username, password_hash, role")
-        .or(`username.eq.${usernameClean},username.eq.${identifier.toLowerCase()}`);
-
-      if (customUsers && customUsers.length > 0) {
-        const matchedUser = customUsers.find(
-          (u) => u.password_hash === hashedInput || u.password_hash === password
-        );
-
-        if (matchedUser) {
-          const userObj = {
-            id: matchedUser.id,
-            username: matchedUser.username,
-            role: matchedUser.role || activeRole,
-            email: `${matchedUser.username}@ryvom.local`,
-          };
-          activeStorage.setItem("ryvom_user", JSON.stringify(userObj));
-          if (typeof document !== "undefined") {
-            const maxAge = rememberMe ? 604800 : 86400;
-            document.cookie = `ryvom_user=${encodeURIComponent(JSON.stringify(userObj))}; path=/; max-age=${maxAge}`;
-            document.cookie = `ryvom_remember_me=${rememberMe ? "true" : "false"}; path=/; max-age=${maxAge}`;
-          }
-          setSuccessMessage("Logged in successfully! Redirecting...");
-          setTimeout(() => {
-            window.location.href = "/";
-          }, 400);
-          return;
-        }
-      }
-
-      // 2. Fallback to Supabase Auth
       const { data, error } = await supabase.auth.signInWithPassword({
         email: identifier,
         password,
@@ -162,11 +124,6 @@ export default function LoginPage() {
           role: publicUser?.role || activeRole,
         };
         activeStorage.setItem("ryvom_user", JSON.stringify(userObj));
-        if (typeof document !== "undefined") {
-          const maxAge = rememberMe ? 604800 : 86400;
-          document.cookie = `ryvom_user=${encodeURIComponent(JSON.stringify(userObj))}; path=/; max-age=${maxAge}`;
-          document.cookie = `ryvom_remember_me=${rememberMe ? "true" : "false"}; path=/; max-age=${maxAge}`;
-        }
         setSuccessMessage("Logged in successfully! Redirecting...");
         setTimeout(() => {
           window.location.href = "/";
