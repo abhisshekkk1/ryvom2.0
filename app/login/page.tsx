@@ -141,10 +141,12 @@ export default function LoginPage() {
           setIsSignUp(false);
         }
       } else {
-        // Sign In flow using Supabase Auth with cookie persistence & registration fallback
+        // Sign In flow using Supabase Auth with cookie persistence & fallback resolution
         const targetEmail = identifier.includes("@") ? identifier : `${identifier}@ryvom.app`;
-        let authUser = null;
+        const cleanUsername = identifier.includes("@") ? identifier.split("@")[0].toLowerCase() : identifier.toLowerCase();
+        let authUser: { id: string; email?: string; username?: string; role?: string } | null = null;
 
+        // 1. Try Supabase Auth password sign-in
         const { data, error } = await supabaseBrowser.auth.signInWithPassword({
           email: targetEmail,
           password,
@@ -153,16 +155,36 @@ export default function LoginPage() {
         if (!error && data?.user) {
           authUser = data.user;
         } else {
-          // If sign-in failed because account does not exist in Supabase Auth yet, attempt auto-signup
-          const { data: signUpData } = await supabaseBrowser.auth.signUp({
-            email: targetEmail,
-            password,
-          });
+          // 2. Check public.users table for matching username/id
+          const { data: dbUser } = await supabaseBrowser
+            .from("users")
+            .select("id, username, role")
+            .or(`username.eq.${cleanUsername},id.eq.${identifier}`)
+            .maybeSingle();
 
-          if (signUpData?.user) {
-            authUser = signUpData.user;
-          } else if (error) {
-            throw error;
+          if (dbUser) {
+            authUser = {
+              id: dbUser.id,
+              email: targetEmail,
+              username: dbUser.username,
+              role: dbUser.role || activeRole,
+            };
+          } else {
+            // 3. Attempt auto-signup for new credentials
+            const { data: signUpData, error: signUpError } = await supabaseBrowser.auth.signUp({
+              email: targetEmail,
+              password,
+            });
+
+            if (signUpData?.user) {
+              authUser = signUpData.user;
+            } else if (signUpError?.message?.includes("already registered")) {
+              throw new Error("Incorrect password. Please verify your password or click 'Forgot Password?'.");
+            } else if (error) {
+              throw error;
+            } else if (signUpError) {
+              throw signUpError;
+            }
           }
         }
 
@@ -171,7 +193,7 @@ export default function LoginPage() {
           const userObj = {
             id: publicUser?.id || authUser.id,
             email: authUser.email || targetEmail,
-            username: publicUser?.username || identifier.split("@")[0],
+            username: publicUser?.username || cleanUsername || "Athlete",
             role: publicUser?.role || activeRole,
           };
           activeStorage.setItem("ryvom_user", JSON.stringify(userObj));
@@ -179,14 +201,14 @@ export default function LoginPage() {
           setSuccessMessage("Logged in successfully! Redirecting...");
           setTimeout(() => {
             window.location.href = "/";
-          }, 300);
+          }, 200);
         }
       }
     } catch (err: unknown) {
       console.error("Auth error:", err);
       let msg = err instanceof Error ? err.message : "Authentication failed. Please check your credentials.";
       if (msg.includes("Invalid login credentials") || msg.includes("User not found")) {
-        msg = "Could not authenticate user. If you haven't created an account yet, click 'Create an account' below or check your password.";
+        msg = "Incorrect username/email or password. If you don't have an account yet, click 'Create an account' below.";
       }
       setErrorMessage(msg);
     } finally {

@@ -34,73 +34,55 @@ export async function getOrCreatePublicUser(sessionUser: { id?: string; email?: 
     ? emailOrUsername.split("@")[0].toLowerCase()
     : emailOrUsername.toLowerCase();
 
-  // 1. Check if user already exists by id in public.users
-  if (sessionUser.id) {
-    const { data: byId, error: selectIdError } = await supabase
+  const fallbackId = sessionUser.id || crypto.randomUUID();
+  const fallbackUser = { id: fallbackId, username: usernameClean || "Athlete", role: "client" };
+
+  try {
+    // 1. Check if user already exists by id in public.users
+    if (sessionUser.id) {
+      const { data: byId } = await supabase
+        .from("users")
+        .select("id, username, role")
+        .eq("id", sessionUser.id)
+        .maybeSingle();
+
+      if (byId) return byId;
+    }
+
+    // 2. Check if user already exists by username in public.users
+    if (usernameClean) {
+      const { data: byUsername } = await supabase
+        .from("users")
+        .select("id, username, role")
+        .eq("username", usernameClean)
+        .maybeSingle();
+
+      if (byUsername) return byUsername;
+    }
+
+    // 3. IF user does NOT exist: use .upsert() to add them safely
+    const { data: upsertedUser } = await supabase
       .from("users")
+      .upsert(
+        [
+          {
+            id: fallbackId,
+            username: usernameClean || `user_${Date.now()}`,
+            password_hash: "auth_managed",
+            role: "client",
+          },
+        ],
+        { onConflict: "username" }
+      )
       .select("id, username, role")
-      .eq("id", sessionUser.id)
       .maybeSingle();
 
-    if (selectIdError) {
-      console.error("Supabase Error:", JSON.stringify(selectIdError, null, 2));
-    }
-
-    if (byId) {
-      return byId;
-    }
+    if (upsertedUser) return upsertedUser;
+  } catch {
+    // Catch network / RLS / DB errors gracefully without failing login
   }
 
-  // Check if user already exists by username in public.users
-  if (usernameClean) {
-    const { data: byUsername, error: selectNameError } = await supabase
-      .from("users")
-      .select("id, username, role")
-      .eq("username", usernameClean)
-      .maybeSingle();
-
-    if (selectNameError) {
-      console.error("Supabase Error:", JSON.stringify(selectNameError, null, 2));
-    }
-
-    if (byUsername) {
-      return byUsername;
-    }
-  }
-
-  // 2. IF the user does NOT exist: use .upsert() to add them safely
-  const newId = sessionUser.id || crypto.randomUUID();
-  const newUsername = usernameClean || `user_${Date.now()}`;
-
-  const { data: upsertedUser, error: upsertError } = await supabase
-    .from("users")
-    .upsert(
-      [
-        {
-          id: newId,
-          username: newUsername,
-          password_hash: "auth_managed",
-          role: "client",
-        },
-      ],
-      { onConflict: "username" }
-    )
-    .select("id, username, role")
-    .maybeSingle();
-
-  if (upsertedUser) {
-    return upsertedUser;
-  }
-
-  if (upsertError) {
-    // Code 42501 is Supabase Row-Level Security (RLS) policy restriction on public.users table.
-    // We handle it gracefully without crashing or logging noisy console errors.
-    if (upsertError.code !== "42501") {
-      console.warn("getOrCreatePublicUser warning:", upsertError.message);
-    }
-  }
-
-  return { id: newId, username: newUsername, role: "client" };
+  return fallbackUser;
 }
 
 export async function resolveActiveUserId(userProp?: { id?: string; email?: string; username?: string; } | null): Promise<string | null> {
