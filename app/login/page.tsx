@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { createBrowserClient } from "@supabase/ssr";
 import { supabase } from "@/lib/supabase";
 import { getOrCreatePublicUser } from "@/lib/userHelper";
@@ -29,6 +30,7 @@ const GoogleIcon = () => (
 );
 
 export default function LoginPage() {
+  const router = useRouter();
   const [activeRole, setActiveRole] = useState<"client" | "coach">("client");
   const [usernameOrEmail, setUsernameOrEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -125,9 +127,7 @@ export default function LoginPage() {
         };
         activeStorage.setItem("ryvom_user", JSON.stringify(userObj));
         setSuccessMessage("Logged in successfully! Redirecting...");
-        setTimeout(() => {
-          window.location.href = "/";
-        }, 400);
+        router.push("/");
       }
     } catch (err: any) {
       console.error("Login error:", err);

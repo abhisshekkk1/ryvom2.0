@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { createBrowserClient } from "@supabase/ssr";
 import { supabase } from "@/lib/supabase";
 import { getOrCreatePublicUser } from "@/lib/userHelper";
@@ -28,6 +29,7 @@ const GoogleIcon = () => (
 );
 
 export default function Auth({ onLoginSuccess }: { onLoginSuccess?: (user: any) => void }) {
+  const router = useRouter();
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -103,7 +105,7 @@ export default function Auth({ onLoginSuccess }: { onLoginSuccess?: (user: any) 
           };
           activeStorage.setItem("ryvom_user", JSON.stringify(fullUser));
           if (onLoginSuccess) onLoginSuccess(fullUser);
-          window.location.reload();
+          router.push("/");
         } else {
           setMessage({ type: "success", text: "Sign up successful! Please check your email or sign in." });
         }
@@ -126,7 +128,7 @@ export default function Auth({ onLoginSuccess }: { onLoginSuccess?: (user: any) 
           activeStorage.setItem("ryvom_user", JSON.stringify(userObj));
           setMessage({ type: "success", text: "Logged in successfully!" });
           if (onLoginSuccess) onLoginSuccess(userObj);
-          window.location.reload();
+          router.push("/");
         }
       }
     } catch (err: any) {

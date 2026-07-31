@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import Auth from "@/components/Auth";
 import Dashboard from "@/components/Dashboard";
@@ -12,6 +13,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { getOrCreatePublicUser, fileToBase64 } from "@/lib/userHelper";
 
 export default function Home() {
+  const router = useRouter();
   const [user, setUser] = useState<any>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"dashboard" | "workouts" | "strength" | "nutrition" | "recipes">("dashboard");
@@ -54,7 +56,7 @@ export default function Home() {
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     setUser(null);
-    window.location.href = "/login";
+    router.push("/login");
   };
 
   const handleCalculateAndLog = async (e: React.FormEvent) => {
