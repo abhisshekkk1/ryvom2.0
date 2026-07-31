@@ -27,29 +27,32 @@ export async function GET(request: NextRequest) {
       }
     );
 
+    let authUser = null;
+
     if (code) {
       const { error } = await supabase.auth.exchangeCodeForSession(code);
       if (!error) {
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-
-        if (user) {
-          await getOrCreatePublicUser(user);
-          response.cookies.set("ryvom_user", "true", { path: "/", maxAge: 31536000, sameSite: "lax" });
-        }
-        return response;
+        const { data: { user } } = await supabase.auth.getUser();
+        authUser = user;
+      } else {
+        console.error("Auth callback code exchange error:", error.message);
       }
-      console.error("Auth callback code exchange error:", error.message);
     }
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    if (!authUser) {
+      const { data: { user } } = await supabase.auth.getUser();
+      authUser = user;
+    }
 
-    if (user) {
-      await getOrCreatePublicUser(user);
-      response.cookies.set("ryvom_user", "true", { path: "/", maxAge: 31536000, sameSite: "lax" });
+    if (authUser) {
+      const publicUser = await getOrCreatePublicUser(authUser);
+      const userObj = {
+        id: publicUser?.id || authUser.id,
+        email: authUser.email,
+        username: publicUser?.username || authUser.email?.split("@")[0] || "User",
+        role: publicUser?.role || "client",
+      };
+      response.cookies.set("ryvom_user", JSON.stringify(userObj), { path: "/", maxAge: 31536000, sameSite: "lax" });
       return response;
     }
 

@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase";
+import { supabase, getBrowserSupabase } from "@/lib/supabase";
 import Dashboard from "@/components/Dashboard";
 import StrengthTracker from "@/components/StrengthTracker";
 import RecipeBuilder from "@/components/RecipeBuilder";
@@ -31,20 +31,44 @@ export default function Home() {
 
   useEffect(() => {
     const resolveUser = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+      const browserClient = getBrowserSupabase();
+      const { data: { session } } = await browserClient.auth.getSession();
       if (session?.user) {
         const publicUser = await getOrCreatePublicUser(session.user);
-        setUser(publicUser || session.user);
+        const resolved = publicUser || session.user;
+        setUser(resolved);
+        if (typeof window !== "undefined") {
+          localStorage.setItem("ryvom_user", JSON.stringify(resolved));
+        }
+        setAuthLoading(false);
+        return;
+      }
+
+      const { data: { user: authUser } } = await browserClient.auth.getUser();
+      if (authUser) {
+        const publicUser = await getOrCreatePublicUser(authUser);
+        const resolved = publicUser || authUser;
+        setUser(resolved);
+        if (typeof window !== "undefined") {
+          localStorage.setItem("ryvom_user", JSON.stringify(resolved));
+        }
         setAuthLoading(false);
         return;
       }
 
       if (typeof window !== "undefined") {
-        const savedUser = localStorage.getItem("ryvom_user") || sessionStorage.getItem("ryvom_user");
+        const cookies = document.cookie.split(";").reduce((acc: Record<string, string>, item) => {
+          const [k, v] = item.trim().split("=");
+          if (k && v) acc[k] = decodeURIComponent(v);
+          return acc;
+        }, {});
+
+        const savedUser = localStorage.getItem("ryvom_user") || sessionStorage.getItem("ryvom_user") || cookies["ryvom_user"];
         if (savedUser) {
           try {
             const parsed = JSON.parse(savedUser);
             if (parsed && parsed.id) {
+              localStorage.setItem("ryvom_user", JSON.stringify(parsed));
               setUser(parsed);
               setAuthLoading(false);
               return;
