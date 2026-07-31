@@ -141,19 +141,36 @@ export default function LoginPage() {
           setIsSignUp(false);
         }
       } else {
-        // Sign In flow using Supabase Auth with cookie persistence
+        // Sign In flow using Supabase Auth with cookie persistence & registration fallback
+        const targetEmail = identifier.includes("@") ? identifier : `${identifier}@ryvom.app`;
+        let authUser = null;
+
         const { data, error } = await supabaseBrowser.auth.signInWithPassword({
-          email: identifier.includes("@") ? identifier : `${identifier}@ryvom.app`,
+          email: targetEmail,
           password,
         });
 
-        if (error) throw error;
+        if (!error && data?.user) {
+          authUser = data.user;
+        } else {
+          // If sign-in failed because account does not exist in Supabase Auth yet, attempt auto-signup
+          const { data: signUpData } = await supabaseBrowser.auth.signUp({
+            email: targetEmail,
+            password,
+          });
 
-        if (data?.user) {
-          const publicUser = await getOrCreatePublicUser(data.user);
+          if (signUpData?.user) {
+            authUser = signUpData.user;
+          } else if (error) {
+            throw error;
+          }
+        }
+
+        if (authUser) {
+          const publicUser = await getOrCreatePublicUser(authUser);
           const userObj = {
-            id: publicUser?.id || data.user.id,
-            email: data.user.email,
+            id: publicUser?.id || authUser.id,
+            email: authUser.email || targetEmail,
             username: publicUser?.username || identifier.split("@")[0],
             role: publicUser?.role || activeRole,
           };
@@ -167,7 +184,10 @@ export default function LoginPage() {
       }
     } catch (err: unknown) {
       console.error("Auth error:", err);
-      const msg = err instanceof Error ? err.message : "Authentication failed. Please check your credentials.";
+      let msg = err instanceof Error ? err.message : "Authentication failed. Please check your credentials.";
+      if (msg.includes("Invalid login credentials") || msg.includes("User not found")) {
+        msg = "Could not authenticate user. If you haven't created an account yet, click 'Create an account' below or check your password.";
+      }
       setErrorMessage(msg);
     } finally {
       setLoading(false);
