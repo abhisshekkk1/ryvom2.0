@@ -145,17 +145,25 @@ export default function SettingsPage() {
         }
 
         // 2. Fetch latest saved settings from Supabase user_settings table for active user
-        let query = supabase.from("user_settings").select("user_id, target_calories, target_protein, target_carbs, target_fats, goal_weight");
-        if (uid) query = query.eq("user_id", uid);
-        const { data, error } = await query.limit(1).maybeSingle();
-        if (error) console.error("Error loading user settings:", error);
+        if (uid) {
+          const { data, error } = await supabase
+            .from("user_settings")
+            .select("user_id, target_calories, target_protein, target_carbs, target_fats, goal_weight")
+            .eq("user_id", uid)
+            .limit(1)
+            .maybeSingle();
 
-        if (data) {
-          setRowId(data.user_id || null);
-          setManualProtein(Number(data.target_protein) || 180);
-          setManualCarbs(Number(data.target_carbs) || 150);
-          setManualFats(Number(data.target_fats) || 60);
-          if (data.goal_weight) setGoalWeightKg(Number(data.goal_weight));
+          if (error) {
+            if (error.code !== "PGRST116" && error.code !== "42P01" && error.code !== "42501") {
+              console.warn("User settings fetch note:", error.message || error);
+            }
+          } else if (data) {
+            setRowId(data.user_id || null);
+            setManualProtein(Number(data.target_protein) || 180);
+            setManualCarbs(Number(data.target_carbs) || 150);
+            setManualFats(Number(data.target_fats) || 60);
+            if (data.goal_weight) setGoalWeightKg(Number(data.goal_weight));
+          }
         }
 
         // 3. Fetch latest logged weight from progress/weight_logs so bodyWeightKg defaults to actual latest weight
