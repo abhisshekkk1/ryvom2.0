@@ -737,9 +737,7 @@ export default function Dashboard({ user, onNavigateToNutrition, onNavigateToWor
             <ManualLiftLogger user={user} />
           </div>
 
-          {/* Quick Body Weight Logger Section */}
-          <WeightLogger user={user} />
-        </>
+          </>
       )}
     </div>
   );

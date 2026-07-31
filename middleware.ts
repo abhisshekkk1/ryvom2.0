@@ -1,66 +1,55 @@
-import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
 export async function middleware(request: NextRequest) {
-  let response = NextResponse.next({
-    request: {
-      headers: request.headers,
-    },
-  });
+  let supabaseResponse = NextResponse.next({ request });
 
   const pathname = request.nextUrl.pathname;
 
-  // Always allow public routes, auth endpoints, static assets, and login page
-  if (
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll();
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value, options }) =>
+            supabaseResponse.cookies.set(name, value, options)
+          );
+        },
+      },
+    },
+  );
+
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  const isPublicPath =
     pathname.startsWith("/login") ||
     pathname.startsWith("/auth") ||
     pathname.startsWith("/_next") ||
     pathname.startsWith("/api") ||
     pathname === "/favicon.ico" ||
     pathname === "/manifest.webmanifest" ||
-    /\.(png|jpg|jpeg|svg|webp|gif|css|js)$/.test(pathname)
-  ) {
-    return response;
+    /\.(png|jpg|jpeg|svg|webp|gif|css|js)$/.test(pathname);
+
+  if (isPublicPath) {
+    return supabaseResponse;
   }
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-
-  const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
-    cookies: {
-      getAll() {
-        return request.cookies.getAll();
-      },
-      setAll(cookiesToSet) {
-        cookiesToSet.forEach(({ name, value, options }) =>
-          response.cookies.set(name, value, options)
-        );
-      },
-    },
-  });
-
-  // Check active Supabase auth session
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-
-  const isAuthenticated = Boolean(session);
-
-  // If user is unauthenticated and attempting to access a protected route, redirect to /login
-  if (!isAuthenticated && pathname !== "/login") {
+  if (!session) {
     const loginUrl = new URL("/login", request.url);
     return NextResponse.redirect(loginUrl);
   }
 
-  return response;
+  return supabaseResponse;
 }
 
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except static files, images, and next internal files
-     */
     "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };

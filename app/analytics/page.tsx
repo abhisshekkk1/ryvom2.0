@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { resolveActiveUserId } from "@/lib/userHelper";
 
@@ -23,8 +24,10 @@ export interface LiftEntry {
 }
 
 export default function AnalyticsPage() {
-  const [weekOffset, setWeekOffset] = useState<number>(0); // 0 = current week, -1 = last week
+  const router = useRouter();
+  const [weekOffset, setWeekOffset] = useState<number>(0);
   const [activeUserId, setActiveUserId] = useState<string | null>(null);
+  const [authChecked, setAuthChecked] = useState(false);
 
   // Raw data state
   const [selectedWeekWeights, setSelectedWeekWeights] = useState<WeightEntry[]>([]);
@@ -34,6 +37,16 @@ export default function AnalyticsPage() {
 
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) {
+        router.push("/login");
+      } else {
+        setAuthChecked(true);
+      }
+    });
+  }, [router]);
 
   // Calculate 7-day week boundaries based on offset
   const weekRange = useMemo(() => {
@@ -268,6 +281,14 @@ export default function AnalyticsPage() {
       deadMax,
     };
   }, [selectedWeekWeights, priorWeekWeights, selectedWeekLifts, priorWeekLifts]);
+
+  if (!authChecked) {
+    return (
+      <div className="min-h-screen bg-[#0b0b0e] flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-[#ff334b]" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#0b0b0e] text-zinc-100 flex flex-col antialiased">

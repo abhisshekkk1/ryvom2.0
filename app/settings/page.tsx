@@ -9,6 +9,7 @@ import { resolveActiveUserId, hashPassword } from "@/lib/userHelper";
 
 export default function SettingsPage() {
   const router = useRouter();
+  const [authChecked, setAuthChecked] = useState(false);
   const [activeUserId, setActiveUserId] = useState<string | null>(null);
   const [rowId, setRowId] = useState<string | null>(null);
   const [userInfo, setUserInfo] = useState<{ username: string; email: string; role: string }>({
@@ -290,6 +291,24 @@ export default function SettingsPage() {
       setPasswordSaving(false);
     }
   };
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) {
+        router.push("/login");
+      } else {
+        setAuthChecked(true);
+      }
+    });
+  }, [router]);
+
+  if (!authChecked) {
+    return (
+      <div className="min-h-screen bg-[#0b0b0e] flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-[#ff334b]" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#0b0b0e] text-zinc-100 flex flex-col antialiased">
