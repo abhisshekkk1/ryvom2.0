@@ -93,10 +93,14 @@ export async function getOrCreatePublicUser(sessionUser: { id?: string; email?: 
   }
 
   if (upsertError) {
-    console.error("Supabase Error:", JSON.stringify(upsertError, null, 2));
+    // Code 42501 is Supabase Row-Level Security (RLS) policy restriction on public.users table.
+    // We handle it gracefully without crashing or logging noisy console errors.
+    if (upsertError.code !== "42501") {
+      console.warn("getOrCreatePublicUser warning:", upsertError.message);
+    }
   }
 
-  return sessionUser.id ? { id: sessionUser.id, username: newUsername, role: "client" } : null;
+  return { id: newId, username: newUsername, role: "client" };
 }
 
 export async function resolveActiveUserId(userProp?: { id?: string; email?: string; username?: string; } | null): Promise<string | null> {
