@@ -32,25 +32,25 @@ drop policy if exists "Users can view their own lift logs" on public.lift_logs;
 create policy "Users can view their own lift logs"
   on public.lift_logs
   for select
-  using (user_id = auth.uid());
+  using (user_id::text = auth.uid()::text);
 
 drop policy if exists "Users can insert their own lift logs" on public.lift_logs;
 create policy "Users can insert their own lift logs"
   on public.lift_logs
   for insert
-  with check (user_id = auth.uid());
+  with check (user_id::text = auth.uid()::text);
 
 drop policy if exists "Users can update their own lift logs" on public.lift_logs;
 create policy "Users can update their own lift logs"
   on public.lift_logs
   for update
-  using (user_id = auth.uid());
+  using (user_id::text = auth.uid()::text);
 
 drop policy if exists "Users can delete their own lift logs" on public.lift_logs;
 create policy "Users can delete their own lift logs"
   on public.lift_logs
   for delete
-  using (user_id = auth.uid());
+  using (user_id::text = auth.uid()::text);
 
 -- 6. Add SQL CHECK constraint to block excessive weights at the database level
 alter table public.lift_logs drop constraint if exists check_realistic_human_lift_weight;

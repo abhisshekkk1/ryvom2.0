@@ -29,13 +29,13 @@ drop policy if exists "Users can insert their own settings" on public.user_setti
 create policy "Users can insert their own settings"
   on public.user_settings
   for insert
-  with check (user_id = auth.uid());
+  with check (user_id::text = auth.uid()::text);
 
 drop policy if exists "Users can update their own settings" on public.user_settings;
 create policy "Users can update their own settings"
   on public.user_settings
   for update
-  using (user_id = auth.uid());
+  using (user_id::text = auth.uid()::text);
 
 drop policy if exists "Public can view weight logs" on public.weight_logs;
 create policy "Public can view weight logs"
@@ -47,19 +47,19 @@ drop policy if exists "Users can insert own weight" on public.weight_logs;
 create policy "Users can insert own weight"
   on public.weight_logs
   for insert
-  with check (user_id = auth.uid());
+  with check (user_id::text = auth.uid()::text);
 
 drop policy if exists "Users can update own weight" on public.weight_logs;
 create policy "Users can update own weight"
   on public.weight_logs
   for update
-  using (user_id = auth.uid());
+  using (user_id::text = auth.uid()::text);
 
 drop policy if exists "Users can delete own weight" on public.weight_logs;
 create policy "Users can delete own weight"
   on public.weight_logs
   for delete
-  using (user_id = auth.uid());
+  using (user_id::text = auth.uid()::text);
 
 drop policy if exists "Public can view lift logs" on public.lift_logs;
 create policy "Public can view lift logs"
@@ -71,16 +71,16 @@ drop policy if exists "Users can insert own lifts" on public.lift_logs;
 create policy "Users can insert own lifts"
   on public.lift_logs
   for insert
-  with check (user_id = auth.uid());
+  with check (user_id::text = auth.uid()::text);
 
 drop policy if exists "Users can update own lifts" on public.lift_logs;
 create policy "Users can update own lifts"
   on public.lift_logs
   for update
-  using (user_id = auth.uid());
+  using (user_id::text = auth.uid()::text);
 
 drop policy if exists "Users can delete own lifts" on public.lift_logs;
 create policy "Users can delete own lifts"
   on public.lift_logs
   for delete
-  using (user_id = auth.uid());
+  using (user_id::text = auth.uid()::text);

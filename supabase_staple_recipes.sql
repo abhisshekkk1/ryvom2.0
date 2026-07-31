@@ -28,22 +28,22 @@ drop policy if exists "Users can view their own staple recipes" on public.staple
 create policy "Users can view their own staple recipes"
   on public.staple_recipes
   for select
-  using (user_id = auth.uid() or user_id in (select id from public.users where id = user_id));
+  using (user_id::text = auth.uid()::text);
 
 drop policy if exists "Users can insert their own staple recipes" on public.staple_recipes;
 create policy "Users can insert their own staple recipes"
   on public.staple_recipes
   for insert
-  with check (user_id = auth.uid() or user_id in (select id from public.users where id = user_id));
+  with check (user_id::text = auth.uid()::text);
 
 drop policy if exists "Users can update their own staple recipes" on public.staple_recipes;
 create policy "Users can update their own staple recipes"
   on public.staple_recipes
   for update
-  using (user_id = auth.uid() or user_id in (select id from public.users where id = user_id));
+  using (user_id::text = auth.uid()::text);
 
 drop policy if exists "Users can delete their own staple recipes" on public.staple_recipes;
 create policy "Users can delete their own staple recipes"
   on public.staple_recipes
   for delete
-  using (user_id = auth.uid() or user_id in (select id from public.users where id = user_id));
+  using (user_id::text = auth.uid()::text);
