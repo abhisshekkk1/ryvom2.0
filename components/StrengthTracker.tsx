@@ -36,7 +36,7 @@ export interface DraftSetRow {
 }
 
 interface StrengthTrackerProps {
-  user?: any;
+  user?: { id?: string; email?: string; username?: string; role?: string } | null;
   readOnly?: boolean;
 }
 
@@ -135,8 +135,7 @@ export default function StrengthTracker({ user, readOnly = false }: StrengthTrac
     { id: crypto.randomUUID(), setNum: 3, weightKg: 100, reps: 5, rir: "1 RIR", completed: false },
   ]);
 
-  // Human limits validation state & computation
-  const [sarcasticRoast, setSarcasticRoast] = useState<string>("");
+  const [sarcasticRoast] = useState<string>(() => sarcasticErrors[0]);
   const maxAllowedLimit = LIFT_MAX_LIMITS[liftType] || 600;
 
   const isDraftWeightExceeded = useMemo(() => {
@@ -146,16 +145,10 @@ export default function StrengthTracker({ user, readOnly = false }: StrengthTrac
     });
   }, [draftSets, maxAllowedLimit]);
 
-  useEffect(() => {
-    if (isDraftWeightExceeded) {
-      if (!sarcasticRoast) {
-        const randomRoast = sarcasticErrors[Math.floor(Math.random() * sarcasticErrors.length)];
-        setSarcasticRoast(randomRoast);
-      }
-    } else {
-      setSarcasticRoast("");
-    }
-  }, [isDraftWeightExceeded, liftType, draftSets]);
+  const activeSarcasticRoast = useMemo(() => {
+    if (!isDraftWeightExceeded) return "";
+    return sarcasticRoast;
+  }, [isDraftWeightExceeded, sarcasticRoast]);
 
   // Filters & Controls
   const [selectedLiftFilter, setSelectedLiftFilter] = useState<LiftFilter>("ALL");
@@ -180,18 +173,18 @@ export default function StrengthTracker({ user, readOnly = false }: StrengthTrac
       // 1. Fetch Lift Logs with notes and tags
       let query = supabase.from("lift_logs").select("*");
       if (targetUserId) query = query.eq("user_id", targetUserId);
-      const { data: liftData, error: dbErr } = await query.order("logged_date", { ascending: true });
+      const { data: liftData } = await query.order("logged_date", { ascending: true });
 
       if (liftData && liftData.length > 0) {
-        const formatted: LiftLogEntry[] = liftData.map((d: any) => ({
-          id: d.id,
-          lift_type: d.lift_type,
+        const formatted: LiftLogEntry[] = liftData.map((d: Record<string, unknown>) => ({
+          id: String(d.id),
+          lift_type: (d.lift_type as "Squat" | "Bench Press" | "Deadlift") || "Squat",
           weight_kg: Number(d.weight_kg),
           sets: Number(d.sets || 1),
           reps: Number(d.reps),
-          notes: d.notes || "",
-          tags: Array.isArray(d.tags) ? d.tags : d.tags ? String(d.tags).split(",") : [],
-          logged_date: d.logged_date,
+          notes: String(d.notes || ""),
+          tags: Array.isArray(d.tags) ? (d.tags as string[]) : d.tags ? String(d.tags).split(",") : [],
+          logged_date: String(d.logged_date),
         }));
         setLiftLogs(formatted);
       } else {
@@ -317,10 +310,10 @@ export default function StrengthTracker({ user, readOnly = false }: StrengthTrac
 
       if (wData && wData.length > 0) {
         setWeightLogs(
-          wData.map((w: any) => ({
-            id: w.id,
+          wData.map((w: Record<string, unknown>) => ({
+            id: String(w.id),
             weight_kg: Number(w.weight_kg || w.weight),
-            logged_date: w.logged_date || w.date,
+            logged_date: String(w.logged_date || w.date),
           }))
         );
       } else {
@@ -331,7 +324,7 @@ export default function StrengthTracker({ user, readOnly = false }: StrengthTrac
           { id: "bw-4", weight_kg: 79.2, logged_date: new Date().toISOString() },
         ]);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("StrengthTracker fetch error:", err);
     } finally {
       setLoading(false);
@@ -339,7 +332,16 @@ export default function StrengthTracker({ user, readOnly = false }: StrengthTrac
   }, [user]);
 
   useEffect(() => {
-    fetchData();
+    let isMounted = true;
+    const load = async () => {
+      if (isMounted) {
+        await fetchData();
+      }
+    };
+    load();
+    return () => {
+      isMounted = false;
+    };
   }, [fetchData]);
 
   // Draft Dynamic Set Row Controls
@@ -379,7 +381,7 @@ export default function StrengthTracker({ user, readOnly = false }: StrengthTrac
     );
   };
 
-  const handleUpdateDraftRow = (id: string, field: keyof DraftSetRow, value: any) => {
+  const handleUpdateDraftRow = (id: string, field: keyof DraftSetRow, value: unknown) => {
     setDraftSets((prev) =>
       prev.map((row) => (row.id === id ? { ...row, [field]: value } : row))
     );
@@ -399,7 +401,7 @@ export default function StrengthTracker({ user, readOnly = false }: StrengthTrac
     e.preventDefault();
 
     if (isDraftWeightExceeded) {
-      const roast = sarcasticRoast || sarcasticErrors[Math.floor(Math.random() * sarcasticErrors.length)];
+      const roast = activeSarcasticRoast || sarcasticErrors[Math.floor(Math.random() * sarcasticErrors.length)];
       setError(`🛑 ${roast} (${liftType} max limit: ${maxAllowedLimit} kg)`);
       return;
     }
@@ -421,7 +423,7 @@ export default function StrengthTracker({ user, readOnly = false }: StrengthTrac
       const isoDate = new Date(logDate).toISOString();
 
       const newEntriesToSave: LiftLogEntry[] = [];
-      const dbPayloads: any[] = [];
+      const dbPayloads: Record<string, unknown>[] = [];
 
       completedRows.forEach((row) => {
         const wKg = Number(row.weightKg) || 0;
@@ -491,9 +493,10 @@ export default function StrengthTracker({ user, readOnly = false }: StrengthTrac
       ]);
 
       setTimeout(() => setFeedback(null), 4000);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Save workout error:", err);
-      setError(err.message || "Failed to save workout session.");
+      const msg = err instanceof Error ? err.message : "Failed to save workout session.";
+      setError(msg);
     } finally {
       setSaving(false);
     }
@@ -570,7 +573,9 @@ export default function StrengthTracker({ user, readOnly = false }: StrengthTrac
 
     if (timeRange !== "ALL") {
       const days = timeRange === "1M" ? 30 : timeRange === "3M" ? 90 : timeRange === "6M" ? 180 : 365;
-      const cutoff = Date.now() - days * 86400000;
+      // eslint-disable-next-line react-hooks/purity
+      const now = Date.now();
+      const cutoff = now - days * 86400000;
       const timeFiltered = result.filter((l) => new Date(l.logged_date).getTime() >= cutoff);
       if (timeFiltered.length > 0) result = timeFiltered;
     }
@@ -1174,7 +1179,7 @@ export default function StrengthTracker({ user, readOnly = false }: StrengthTrac
                                   {/* Notes Text */}
                                   {log.notes && (
                                     <div className="text-xs text-zinc-400 italic bg-[#0b0b0e] p-2 rounded-lg border border-zinc-800/80 mt-1">
-                                      "{log.notes}"
+                                      &quot;{log.notes}&quot;
                                     </div>
                                   )}
                                 </div>

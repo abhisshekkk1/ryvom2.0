@@ -629,7 +629,7 @@
           Continue with Google
         </button>
         
-        <div class="contact-text">Don't have an account? <span onclick="alert('Coach contact: coach@ryvom.app')">Contact your coach.</span></div>
+        <div class="contact-text">Don't have an account? <span onclick="document.getElementById('signup-modal').style.display = 'flex';">Create an account.</span></div>
       </form>
     </div>
   </div>
@@ -673,6 +673,21 @@
     <h3>🔑 Reset Password</h3>
     <p>Automated resets are disabled for security.<br><br>Please contact <b>Coach Abhishek</b> to verify your identity and get a temporary login key.</p>
     <button class="btn-modal-close" onclick="document.getElementById('reset-modal').style.display = 'none';">Close</button>
+  </div>
+</div>
+
+<!-- Create Account Modal overlay -->
+<div id="signup-modal" class="modal-overlay">
+  <div class="modal-card">
+    <h3>✨ Create an Account</h3>
+    <p>Sign up to start tracking your workouts, nutrition, and strength progress with your coach.</p>
+    <form action="/" method="GET" style="display:flex; flex-direction:column; gap:12px; margin-bottom:16px;">
+      <input type="hidden" name="action" value="signup"/>
+      <input class="form-input" type="text" name="signup_user" placeholder="Username or Email" required style="padding-left:14px;"/>
+      <input class="form-input" type="password" name="signup_pass" placeholder="Password" required style="padding-left:14px;"/>
+      <button class="btn-login" type="submit">Create Account & Login</button>
+    </form>
+    <button class="btn-modal-close" onclick="document.getElementById('signup-modal').style.display = 'none';" style="background:#24242c;">Close</button>
   </div>
 </div>
 

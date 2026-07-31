@@ -96,13 +96,13 @@ interface MealLog {
 }
 
 interface DashboardProps {
-  user: any;
+  user: { id?: string; email?: string; username?: string; role?: string } | null;
   onNavigateToNutrition?: () => void;
   onNavigateToWorkouts?: () => void;
   onNavigateToStrength?: () => void;
 }
 
-export default function Dashboard({ user, onNavigateToNutrition, onNavigateToWorkouts, onNavigateToStrength }: DashboardProps) {
+export default function Dashboard({ user, onNavigateToNutrition, onNavigateToStrength }: DashboardProps) {
   const [todayMeals, setTodayMeals] = useState<MealLog[]>([]);
   const [targets, setTargets] = useState<UserSettings>(DEFAULT_TARGETS);
   const [goalWeight, setGoalWeight] = useState<number>(72.0);
@@ -134,14 +134,16 @@ export default function Dashboard({ user, onNavigateToNutrition, onNavigateToWor
       const settingsData = dbSet;
 
       // Check localStorage for ryvom_user_settings override as secondary fallback
-      let localTargets: any = null;
+      let localTargets: Record<string, unknown> | null = null;
       if (typeof window !== "undefined") {
         const s = localStorage.getItem("ryvom_user_settings");
         if (s) {
           try {
             const parsed = JSON.parse(s);
             if (parsed.target_calories || parsed.goal_weight) localTargets = parsed;
-          } catch (e) {}
+          } catch {
+            // ignore JSON parse error
+          }
         }
       }
 
@@ -182,16 +184,16 @@ export default function Dashboard({ user, onNavigateToNutrition, onNavigateToWor
       const { data: recipeData } = await rQuery.order("created_at", { ascending: false });
 
       if (recipeData && recipeData.length > 0) {
-        const formatted: StapleMeal[] = recipeData.map((r: any) => ({
-          id: r.id,
-          name: r.meal_category || "Lunch",
-          food_item: r.recipe_name,
+        const formatted: StapleMeal[] = recipeData.map((r: Record<string, unknown>) => ({
+          id: String(r.id),
+          name: String(r.meal_category || "Lunch"),
+          food_item: String(r.recipe_name || "Food"),
           weight_g: 250,
           calories: Number(r.calories),
           protein: Number(r.protein),
           carbs: Number(r.carbs),
           fats: Number(r.fat || r.fats),
-          icon: r.icon || "🥗",
+          icon: String(r.icon || "🥗"),
         }));
         setStapleRecipes(formatted);
       } else {
@@ -215,8 +217,8 @@ export default function Dashboard({ user, onNavigateToNutrition, onNavigateToWor
 
       if (dbError) throw dbError;
       setTodayMeals(mealsData || []);
-    } catch (err: any) {
-      console.error("Supabase Error:", err);
+    } catch (err: unknown) {
+      console.error("Dashboard error:", err);
       setError("Failed to fetch today's dashboard data.");
     } finally {
       setLoading(false);
@@ -224,10 +226,19 @@ export default function Dashboard({ user, onNavigateToNutrition, onNavigateToWor
   }, [user]);
 
   useEffect(() => {
-    fetchDashboardData();
+    let isMounted = true;
+    const load = async () => {
+      if (isMounted) {
+        await fetchDashboardData();
+      }
+    };
+    load();
     const handleFocus = () => fetchDashboardData();
     window.addEventListener("focus", handleFocus);
-    return () => window.removeEventListener("focus", handleFocus);
+    return () => {
+      isMounted = false;
+      window.removeEventListener("focus", handleFocus);
+    };
   }, [fetchDashboardData]);
 
   // Delete logged meal item handler
@@ -247,7 +258,7 @@ export default function Dashboard({ user, onNavigateToNutrition, onNavigateToWor
         console.error("Delete meal_logs error:", delErr);
         await supabase.from("meals").delete().eq("id", mealId);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Delete meal error:", err);
     }
   };
@@ -296,7 +307,7 @@ export default function Dashboard({ user, onNavigateToNutrition, onNavigateToWor
       if (updateErr) {
         console.error("Update meal_logs error:", updateErr);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Update meal error:", err);
     }
   };
@@ -342,9 +353,9 @@ export default function Dashboard({ user, onNavigateToNutrition, onNavigateToWor
       setTimeout(() => {
         setQuickAddFeedback(null);
       }, 3500);
-    } catch (err: any) {
-      console.error("Quick Add Error:", err);
-      alert(`Failed to add ${staple.food_item}: ${err.message || err}`);
+    } catch (err: unknown) {
+      console.error("Quick add error:", err);
+      setQuickAddFeedback(`❌ Failed to quick-add item: ${staple.food_item}`);
     } finally {
       setAddingStapleId(null);
     }
@@ -547,7 +558,7 @@ export default function Dashboard({ user, onNavigateToNutrition, onNavigateToWor
                   <span>⚡</span> Quick-Add Favorite Staples
                 </h3>
                 <p className="text-xs text-zinc-400 mt-0.5">
-                  Tap any staple to log instantly and update today's macros
+                  Tap any staple to log instantly and update today&apos;s macros
                 </p>
               </div>
             </div>
@@ -595,7 +606,7 @@ export default function Dashboard({ user, onNavigateToNutrition, onNavigateToWor
           <div className="p-6 rounded-2xl bg-[#121216] border border-zinc-800/60 shadow-xl space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-base font-extrabold text-white flex items-center gap-2">
-                <span>🍽️</span> Today's Logged Meals ({todayMeals.length})
+                <span>🍽️</span> Today&apos;s Logged Meals ({todayMeals.length})
               </h3>
               {onNavigateToNutrition && (
                 <button

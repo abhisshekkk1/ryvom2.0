@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { resolveActiveUserId } from "@/lib/userHelper";
 
 interface WeightLoggerProps {
-  user?: any;
+  user?: { id?: string; email?: string; username?: string; role?: string } | null;
   onWeightLogged?: (newWeight: number) => void;
 }
 
@@ -40,7 +40,7 @@ export default function WeightLogger({ user, onWeightLogged }: WeightLoggerProps
       };
 
       // 1. Insert into public.weight_logs table
-      let { error: insertErr } = await supabase.from("weight_logs").insert([newEntry]);
+      const { error: insertErr } = await supabase.from("weight_logs").insert([newEntry]);
 
       // 2. Fallback to public.progress table if weight_logs table fails
       if (insertErr) {
@@ -64,9 +64,10 @@ export default function WeightLogger({ user, onWeightLogged }: WeightLoggerProps
       }
 
       setTimeout(() => setFeedback(null), 3500);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Save weight error:", err);
-      setError(err.message || "Failed to save weight entry.");
+      const msg = err instanceof Error ? err.message : "Failed to save weight entry.";
+      setError(msg);
     } finally {
       setSaving(false);
     }

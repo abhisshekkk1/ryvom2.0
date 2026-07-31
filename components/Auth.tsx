@@ -1,10 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { createBrowserClient } from "@supabase/ssr";
-import { supabase } from "@/lib/supabase";
 import { getOrCreatePublicUser } from "@/lib/userHelper";
+
+export interface UserSession {
+  id: string;
+  email?: string;
+  username: string;
+  role: string;
+}
 
 // Modern SVG Icon for Google OAuth Button
 const GoogleIcon = () => (
@@ -28,8 +33,7 @@ const GoogleIcon = () => (
   </svg>
 );
 
-export default function Auth({ onLoginSuccess }: { onLoginSuccess?: (user: any) => void }) {
-  const router = useRouter();
+export default function Auth({ onLoginSuccess }: { onLoginSuccess?: (user: UserSession) => void }) {
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -37,6 +41,13 @@ export default function Auth({ onLoginSuccess }: { onLoginSuccess?: (user: any) 
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  const getSupabaseBrowser = () => {
+    return createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
+  };
 
   // Handle Google OAuth Sign In using @supabase/ssr createBrowserClient
   const handleGoogleSignIn = async () => {
@@ -49,11 +60,7 @@ export default function Auth({ onLoginSuccess }: { onLoginSuccess?: (user: any) 
         localStorage.setItem("ryvom_remember_me", "true");
       }
 
-      const supabaseBrowser = createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-      );
-
+      const supabaseBrowser = getSupabaseBrowser();
       const { error } = await supabaseBrowser.auth.signInWithOAuth({
         provider: "google",
         options: {
@@ -62,9 +69,10 @@ export default function Auth({ onLoginSuccess }: { onLoginSuccess?: (user: any) 
       });
 
       if (error) throw error;
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Google OAuth error:", err);
-      setMessage({ type: "error", text: err.message || "Failed to sign in with Google." });
+      const errorText = err instanceof Error ? err.message : "Failed to sign in with Google.";
+      setMessage({ type: "error", text: errorText });
     } finally {
       setGoogleLoading(false);
     }
@@ -78,18 +86,18 @@ export default function Auth({ onLoginSuccess }: { onLoginSuccess?: (user: any) 
     const identifier = email.trim();
     const activeStorage = rememberMe ? localStorage : sessionStorage;
 
-    // Clear opposite storage mechanism
     if (rememberMe) {
       sessionStorage.removeItem("ryvom_user");
     } else {
       localStorage.removeItem("ryvom_user");
     }
 
+    const supabaseBrowser = getSupabaseBrowser();
+
     try {
       if (isSignUp) {
-        // Standard Supabase Auth SignUp
-        const { error, data } = await supabase.auth.signUp({
-          email: identifier,
+        const { error, data } = await supabaseBrowser.auth.signUp({
+          email: identifier.includes("@") ? identifier : `${identifier}@ryvom.app`,
           password,
         });
 
@@ -97,21 +105,25 @@ export default function Auth({ onLoginSuccess }: { onLoginSuccess?: (user: any) 
 
         if (data?.user) {
           const publicUser = await getOrCreatePublicUser(data.user);
-          const fullUser = {
+          const fullUser: UserSession = {
             id: publicUser?.id || data.user.id,
             email: data.user.email,
             username: publicUser?.username || identifier.split("@")[0],
             role: publicUser?.role || "client",
           };
           activeStorage.setItem("ryvom_user", JSON.stringify(fullUser));
-          if (onLoginSuccess) onLoginSuccess(fullUser);
-          router.push("/");
+          if (onLoginSuccess) {
+            onLoginSuccess(fullUser);
+          } else {
+            window.location.href = "/";
+          }
         } else {
-          setMessage({ type: "success", text: "Sign up successful! Please check your email or sign in." });
+          setMessage({ type: "success", text: "Sign up successful! Please sign in with your account." });
+          setIsSignUp(false);
         }
       } else {
-        const { error, data } = await supabase.auth.signInWithPassword({
-          email: identifier,
+        const { error, data } = await supabaseBrowser.auth.signInWithPassword({
+          email: identifier.includes("@") ? identifier : `${identifier}@ryvom.app`,
           password,
         });
 
@@ -119,7 +131,7 @@ export default function Auth({ onLoginSuccess }: { onLoginSuccess?: (user: any) 
 
         if (data?.user) {
           const publicUser = await getOrCreatePublicUser(data.user);
-          const userObj = {
+          const userObj: UserSession = {
             id: publicUser?.id || data.user.id,
             email: data.user.email,
             username: publicUser?.username || identifier.split("@")[0],
@@ -127,12 +139,16 @@ export default function Auth({ onLoginSuccess }: { onLoginSuccess?: (user: any) 
           };
           activeStorage.setItem("ryvom_user", JSON.stringify(userObj));
           setMessage({ type: "success", text: "Logged in successfully!" });
-          if (onLoginSuccess) onLoginSuccess(userObj);
-          router.push("/");
+          if (onLoginSuccess) {
+            onLoginSuccess(userObj);
+          } else {
+            window.location.href = "/";
+          }
         }
       }
-    } catch (err: any) {
-      setMessage({ type: "error", text: err.message || "An authentication error occurred." });
+    } catch (err: unknown) {
+      const errorText = err instanceof Error ? err.message : "An authentication error occurred.";
+      setMessage({ type: "error", text: errorText });
     } finally {
       setLoading(false);
     }

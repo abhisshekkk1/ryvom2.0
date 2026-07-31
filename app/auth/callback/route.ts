@@ -32,7 +32,7 @@ export async function GET(request: Request) {
     }
 
     return NextResponse.redirect(new URL("/login?error=Could%20not%20authenticate%20user", request.url));
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("Auth callback error:", err);
     return NextResponse.redirect(new URL("/login?error=Authentication%20failed", request.url));
   }

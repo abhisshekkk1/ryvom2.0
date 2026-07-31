@@ -4,7 +4,6 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import Auth from "@/components/Auth";
 import Dashboard from "@/components/Dashboard";
 import StrengthTracker from "@/components/StrengthTracker";
 import RecipeBuilder from "@/components/RecipeBuilder";
@@ -14,7 +13,8 @@ import { getOrCreatePublicUser, fileToBase64 } from "@/lib/userHelper";
 
 export default function Home() {
   const router = useRouter();
-  const [user, setUser] = useState<any>(null);
+  // User session state
+  const [user, setUser] = useState<{ id?: string; email?: string; username?: string; role?: string } | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"dashboard" | "workouts" | "strength" | "nutrition" | "recipes">("dashboard");
 
@@ -30,20 +30,52 @@ export default function Home() {
   const [nutritionSuccess, setNutritionSuccess] = useState<string | null>(null);
 
   useEffect(() => {
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
+    const resolveUser = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
         const publicUser = await getOrCreatePublicUser(session.user);
         setUser(publicUser || session.user);
-      } else {
-        setUser(null);
+        setAuthLoading(false);
+        return;
       }
+
+      if (typeof window !== "undefined") {
+        const savedUser = localStorage.getItem("ryvom_user") || sessionStorage.getItem("ryvom_user");
+        if (savedUser) {
+          try {
+            const parsed = JSON.parse(savedUser);
+            if (parsed && parsed.id) {
+              setUser(parsed);
+              setAuthLoading(false);
+              return;
+            }
+          } catch {
+            // ignore JSON error
+          }
+        }
+      }
+
+      setUser(null);
       setAuthLoading(false);
-    });
+    };
+
+    resolveUser();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (session?.user) {
         const publicUser = await getOrCreatePublicUser(session.user);
         setUser(publicUser || session.user);
+      } else if (typeof window !== "undefined") {
+        const savedUser = localStorage.getItem("ryvom_user") || sessionStorage.getItem("ryvom_user");
+        if (savedUser) {
+          try {
+            setUser(JSON.parse(savedUser));
+          } catch {
+            setUser(null);
+          }
+        } else {
+          setUser(null);
+        }
       } else {
         setUser(null);
       }
@@ -53,10 +85,21 @@ export default function Home() {
     return () => subscription.unsubscribe();
   }, []);
 
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.push("/login");
+    }
+  }, [authLoading, user, router]);
+
   const handleSignOut = async () => {
     await supabase.auth.signOut();
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("ryvom_user");
+      sessionStorage.removeItem("ryvom_user");
+      document.cookie = "ryvom_user=; path=/; max-age=0;";
+    }
     setUser(null);
-    router.push("/login");
+    window.location.href = "/login";
   };
 
   const handleCalculateAndLog = async (e: React.FormEvent) => {
@@ -79,7 +122,7 @@ export default function Home() {
       const genAI = new GoogleGenerativeAI(apiKey);
       const model = genAI.getGenerativeModel({ model: "gemini-3.6-flash" });
 
-      const contents: any[] = [];
+      const contents: (string | { inlineData: { data: string; mimeType: string } })[] = [];
 
       if (imageFile) {
         const { base64Data, mimeType } = await fileToBase64(imageFile);
@@ -164,8 +207,9 @@ export default function Home() {
       setImageFile(null);
       setImagePreview(null);
 
-    } catch (err: any) {
-      setNutritionError(err.message || "Failed to calculate or log meal.");
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : "Failed to calculate or log meal.";
+      setNutritionError(errMsg);
     } finally {
       setNutritionLoading(false);
     }
@@ -265,6 +309,7 @@ export default function Home() {
                 />
                 {imagePreview && (
                   <div className="mt-3 relative inline-block">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={imagePreview} alt="Food Preview" className="w-24 h-24 object-cover rounded-xl border border-zinc-700 shadow-md" />
                     <button
                       type="button"
@@ -340,8 +385,8 @@ export default function Home() {
 
   if (!user) {
     return (
-      <div className="min-h-screen bg-[#0b0b0e] flex items-center justify-center p-4">
-        <Auth />
+      <div className="min-h-screen bg-[#0b0b0e] flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-[#ff334b]" />
       </div>
     );
   }

@@ -14,7 +14,7 @@ export interface WeightLogEntry {
 }
 
 interface WeightTrackerProps {
-  user?: any;
+  user?: { id?: string; email?: string; username?: string; role?: string } | null;
   goalWeight?: number;
   onWeightUpdated?: (newWeight: number) => void;
   readOnly?: boolean;
@@ -76,7 +76,7 @@ export default function WeightTracker({ user, goalWeight = 72.0, onWeightUpdated
         query = query.eq("user_id", targetUserId);
       }
 
-      let { data, error: dbErr } = await query.order("logged_date", { ascending: true });
+      const { data, error: dbErr } = await query.order("logged_date", { ascending: true });
 
       // 2. Fallback to progress table if weight_logs is empty or missing
       if (dbErr || !data || data.length === 0) {
@@ -86,19 +86,21 @@ export default function WeightTracker({ user, goalWeight = 72.0, onWeightUpdated
         const { data: progData } = await progQuery.order("date", { ascending: true });
 
         if (progData && progData.length > 0) {
-          data = progData.map((p) => ({
-            id: p.id,
+          const fallbackFormatted = progData.map((p) => ({
+            id: String(p.id),
             weight_kg: Number(p.weight) || 0,
-            logged_date: p.date,
+            logged_date: String(p.date),
           }));
+          setLogs(fallbackFormatted);
+          return;
         }
       }
 
       if (data && data.length > 0) {
-        const formatted = data.map((d: any) => ({
-          id: d.id,
+        const formatted = data.map((d: Record<string, unknown>) => ({
+          id: String(d.id),
           weight_kg: Number(d.weight_kg || d.weight || 0),
-          logged_date: d.logged_date || d.date || new Date().toISOString(),
+          logged_date: String(d.logged_date || d.date || new Date().toISOString()),
         }));
         setLogs(formatted);
       } else {
@@ -111,7 +113,7 @@ export default function WeightTracker({ user, goalWeight = 72.0, onWeightUpdated
           { id: "sample-5", weight_kg: 78.4, logged_date: new Date().toISOString() },
         ]);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Weight logs fetch error:", err);
     } finally {
       setLoading(false);
@@ -119,7 +121,16 @@ export default function WeightTracker({ user, goalWeight = 72.0, onWeightUpdated
   }, [user]);
 
   useEffect(() => {
-    fetchWeightLogs();
+    let isMounted = true;
+    const load = async () => {
+      if (isMounted) {
+        await fetchWeightLogs();
+      }
+    };
+    load();
+    return () => {
+      isMounted = false;
+    };
   }, [fetchWeightLogs]);
 
   // Handle logging a new weight entry with user_id binding
@@ -146,7 +157,7 @@ export default function WeightTracker({ user, goalWeight = 72.0, onWeightUpdated
       };
 
       // Try inserting into weight_logs with explicit user_id
-      let { error: insertErr } = await supabase.from("weight_logs").insert([newEntry]);
+      const { error: insertErr } = await supabase.from("weight_logs").insert([newEntry]);
 
       // Fallback insert to progress table if weight_logs table fails
       if (insertErr) {
@@ -176,9 +187,10 @@ export default function WeightTracker({ user, goalWeight = 72.0, onWeightUpdated
       if (onWeightUpdated) onWeightUpdated(val);
 
       setTimeout(() => setFeedback(null), 3500);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Save weight error:", err);
-      setError(err.message || "Failed to log weight.");
+      const msg = err instanceof Error ? err.message : "Failed to log weight.";
+      setError(msg);
     } finally {
       setSaving(false);
     }

@@ -24,8 +24,8 @@ export async function middleware(request: NextRequest) {
   );
 
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
+    data: { user },
+  } = await supabase.auth.getUser();
 
   const isPublicPath =
     pathname.startsWith("/login") ||
@@ -40,7 +40,12 @@ export async function middleware(request: NextRequest) {
     return supabaseResponse;
   }
 
-  if (!session) {
+  const allCookies = request.cookies.getAll();
+  const hasAuthCookie = allCookies.some(
+    (c) => c.name.startsWith("sb-") || c.name === "ryvom_user"
+  );
+
+  if (!user && !hasAuthCookie) {
     const loginUrl = new URL("/login", request.url);
     return NextResponse.redirect(loginUrl);
   }

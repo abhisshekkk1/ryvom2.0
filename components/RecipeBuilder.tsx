@@ -17,7 +17,7 @@ export interface StapleRecipe {
 }
 
 interface RecipeBuilderProps {
-  user?: any;
+  user?: { id?: string; email?: string; username?: string; role?: string } | null;
   onRecipeLogged?: () => void;
 }
 
@@ -99,25 +99,25 @@ export default function RecipeBuilder({ user, onRecipeLogged }: RecipeBuilderPro
       const targetUserId = await resolveActiveUserId(user);
       let query = supabase.from("staple_recipes").select("*");
       if (targetUserId) query = query.eq("user_id", targetUserId);
-      const { data, error: dbErr } = await query.order("created_at", { ascending: false });
+      const { data } = await query.order("created_at", { ascending: false });
 
       if (data && data.length > 0) {
-        const formatted: StapleRecipe[] = data.map((d: any) => ({
-          id: d.id,
-          recipe_name: d.recipe_name,
-          meal_category: d.meal_category || "Lunch",
+        const formatted: StapleRecipe[] = data.map((d: Record<string, unknown>) => ({
+          id: String(d.id),
+          recipe_name: String(d.recipe_name),
+          meal_category: (d.meal_category as "Breakfast" | "Lunch" | "Dinner" | "Snack" | "Pre-Workout" | "Post-Workout") || "Lunch",
           calories: Number(d.calories),
           protein: Number(d.protein),
           carbs: Number(d.carbs),
           fat: Number(d.fat || d.fats),
-          icon: d.icon || "🥗",
-          created_at: d.created_at,
+          icon: String(d.icon || "🥗"),
+          created_at: String(d.created_at || ""),
         }));
         setRecipes(formatted);
       } else {
         setRecipes(DEFAULT_STAPLE_RECIPES);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Fetch staple recipes error:", err);
       setRecipes(DEFAULT_STAPLE_RECIPES);
     } finally {
@@ -126,7 +126,16 @@ export default function RecipeBuilder({ user, onRecipeLogged }: RecipeBuilderPro
   }, [user]);
 
   useEffect(() => {
-    fetchRecipes();
+    let isMounted = true;
+    const load = async () => {
+      if (isMounted) {
+        await fetchRecipes();
+      }
+    };
+    load();
+    return () => {
+      isMounted = false;
+    };
   }, [fetchRecipes]);
 
   // Create new staple recipe
@@ -195,9 +204,10 @@ export default function RecipeBuilder({ user, onRecipeLogged }: RecipeBuilderPro
       setCarbs("");
       setFat("");
       setTimeout(() => setFeedback(null), 3500);
-    } catch (err: any) {
-      console.error("Save recipe error:", err);
-      setError(err.message || "Failed to save staple recipe.");
+    } catch (err: unknown) {
+      console.error("Create recipe error:", err);
+      const msg = err instanceof Error ? err.message : "Failed to save recipe.";
+      setError(msg);
     } finally {
       setSaving(false);
     }
@@ -285,9 +295,10 @@ export default function RecipeBuilder({ user, onRecipeLogged }: RecipeBuilderPro
       setFeedback(`⚡ One-Tap Logged "${recipe.recipe_name}" (+${recipe.calories} kcal) to ${recipe.meal_category}!`);
       if (onRecipeLogged) onRecipeLogged();
       setTimeout(() => setFeedback(null), 3500);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Quick log error:", err);
-      alert(`Failed to log ${recipe.recipe_name}: ${err.message || err}`);
+      const msg = err instanceof Error ? err.message : String(err);
+      alert(`Failed to log ${recipe.recipe_name}: ${msg}`);
     }
   };
 
@@ -464,7 +475,7 @@ export default function RecipeBuilder({ user, onRecipeLogged }: RecipeBuilderPro
               <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
                 <span>📖</span> Saved Staple Recipes ({recipes.length})
               </h3>
-              <p className="text-[11px] text-zinc-400 mt-0.5">Click "One-Tap Log" to log directly to daily meals</p>
+              <p className="text-[11px] text-zinc-400 mt-0.5">Click &quot;One-Tap Log&quot; to log directly to daily meals</p>
             </div>
           </div>
 

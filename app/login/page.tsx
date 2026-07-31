@@ -2,9 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Image from "next/image";
-import { useRouter } from "next/navigation";
 import { createBrowserClient } from "@supabase/ssr";
-import { supabase } from "@/lib/supabase";
 import { getOrCreatePublicUser } from "@/lib/userHelper";
 
 // Official Google Color SVG Icon
@@ -30,8 +28,8 @@ const GoogleIcon = () => (
 );
 
 export default function LoginPage() {
-  const router = useRouter();
   const [activeRole, setActiveRole] = useState<"client" | "coach">("client");
+  const [isSignUp, setIsSignUp] = useState(false);
   const [usernameOrEmail, setUsernameOrEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -42,16 +40,23 @@ export default function LoginPage() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [showResetModal, setShowResetModal] = useState(false);
 
-  // Check URL query parameters for error messages
+  // Read URL query parameters for error messages safely on mount
   useEffect(() => {
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       const err = params.get("error");
       if (err) {
-        setErrorMessage(decodeURIComponent(err));
+        Promise.resolve().then(() => setErrorMessage(decodeURIComponent(err)));
       }
     }
   }, []);
+
+  const getSupabaseBrowser = () => {
+    return createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
+  };
 
   // Handle Google OAuth Sign In
   const handleGoogleSignIn = async () => {
@@ -64,11 +69,7 @@ export default function LoginPage() {
         sessionStorage.setItem("ryvom_remember_me", "false");
       }
 
-      const supabaseBrowser = createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-      );
-
+      const supabaseBrowser = getSupabaseBrowser();
       const { error } = await supabaseBrowser.auth.signInWithOAuth({
         provider: "google",
         options: {
@@ -77,14 +78,15 @@ export default function LoginPage() {
       });
 
       if (error) throw error;
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Google OAuth error:", err);
-      setErrorMessage(err.message || "Failed to sign in with Google.");
+      const msg = err instanceof Error ? err.message : "Failed to sign in with Google.";
+      setErrorMessage(msg);
       setGoogleLoading(false);
     }
   };
 
-  // Handle standard form login
+  // Handle form login or sign up
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -100,7 +102,6 @@ export default function LoginPage() {
 
     const activeStorage = rememberMe ? localStorage : sessionStorage;
 
-    // Clear opposite storage mechanism
     if (rememberMe) {
       sessionStorage.removeItem("ryvom_user");
       localStorage.setItem("ryvom_remember_me", "true");
@@ -109,29 +110,65 @@ export default function LoginPage() {
       sessionStorage.setItem("ryvom_remember_me", "false");
     }
 
+    const supabaseBrowser = getSupabaseBrowser();
+
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: identifier,
-        password,
-      });
+      if (isSignUp) {
+        // Sign Up flow using Supabase Auth with cookie persistence
+        const { data, error } = await supabaseBrowser.auth.signUp({
+          email: identifier.includes("@") ? identifier : `${identifier}@ryvom.app`,
+          password,
+        });
 
-      if (error) throw error;
+        if (error) throw error;
 
-      if (data?.user) {
-        const publicUser = await getOrCreatePublicUser(data.user);
-        const userObj = {
-          id: publicUser?.id || data.user.id,
-          email: data.user.email,
-          username: publicUser?.username || identifier.split("@")[0],
-          role: publicUser?.role || activeRole,
-        };
-        activeStorage.setItem("ryvom_user", JSON.stringify(userObj));
-        setSuccessMessage("Logged in successfully! Redirecting...");
-        router.push("/");
+        if (data?.user) {
+          const publicUser = await getOrCreatePublicUser(data.user);
+          const userObj = {
+            id: publicUser?.id || data.user.id,
+            email: data.user.email,
+            username: publicUser?.username || identifier.split("@")[0],
+            role: publicUser?.role || activeRole,
+          };
+          activeStorage.setItem("ryvom_user", JSON.stringify(userObj));
+          document.cookie = "ryvom_user=true; path=/; max-age=31536000; SameSite=Lax";
+          setSuccessMessage("Account created successfully! Redirecting to dashboard...");
+          setTimeout(() => {
+            window.location.href = "/";
+          }, 300);
+        } else {
+          setSuccessMessage("Account created! Please sign in with your new credentials.");
+          setIsSignUp(false);
+        }
+      } else {
+        // Sign In flow using Supabase Auth with cookie persistence
+        const { data, error } = await supabaseBrowser.auth.signInWithPassword({
+          email: identifier.includes("@") ? identifier : `${identifier}@ryvom.app`,
+          password,
+        });
+
+        if (error) throw error;
+
+        if (data?.user) {
+          const publicUser = await getOrCreatePublicUser(data.user);
+          const userObj = {
+            id: publicUser?.id || data.user.id,
+            email: data.user.email,
+            username: publicUser?.username || identifier.split("@")[0],
+            role: publicUser?.role || activeRole,
+          };
+          activeStorage.setItem("ryvom_user", JSON.stringify(userObj));
+          document.cookie = "ryvom_user=true; path=/; max-age=31536000; SameSite=Lax";
+          setSuccessMessage("Logged in successfully! Redirecting...");
+          setTimeout(() => {
+            window.location.href = "/";
+          }, 300);
+        }
       }
-    } catch (err: any) {
-      console.error("Login error:", err);
-      setErrorMessage(err.message || "Invalid credentials. Please try again.");
+    } catch (err: unknown) {
+      console.error("Auth error:", err);
+      const msg = err instanceof Error ? err.message : "Authentication failed. Please check your credentials.";
+      setErrorMessage(msg);
     } finally {
       setLoading(false);
     }
@@ -140,7 +177,7 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex w-full bg-[#0d0d0d] text-white font-sans antialiased select-none overflow-x-hidden">
       
-      {/* 2. LEFT COLUMN (Hero & Features - DESKTOP ONLY 50% SPLIT) */}
+      {/* LEFT COLUMN (Hero & Features - DESKTOP ONLY 50% SPLIT) */}
       <div className="hidden lg:flex w-1/2 flex-col justify-between p-12 lg:p-16 relative bg-neutral-900 border-r border-[#24242c] overflow-hidden min-h-screen">
         
         {/* Background Fitness Model Image with Dark Gradients */}
@@ -254,7 +291,7 @@ export default function LoginPage() {
         </div>
       </div>
 
-      {/* 3. RIGHT COLUMN (Login Portal - 50% Desktop, 100% Mobile) */}
+      {/* RIGHT COLUMN (Login Portal - 50% Desktop, 100% Mobile) */}
       <div className="flex w-full lg:w-1/2 flex-col justify-between items-center p-6 sm:p-10 lg:p-12 min-h-screen overflow-y-auto bg-[#0d0d0d]">
         
         {/* Main Form Center Container */}
@@ -278,13 +315,13 @@ export default function LoginPage() {
             <span className="text-xl font-black tracking-widest text-white uppercase">RYVOM</span>
           </div>
 
-          {/* Form Header Text - Staggered Item 1 */}
-          <div className="text-center mb-6 animate-fade-in-up delay-1">
+          {/* Form Header Text */}
+          <div className="text-center mb-6 animate-fade-in-up">
             <h2 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
-              Welcome Back!
+              {isSignUp ? "Create an Account" : "Welcome Back!"}
             </h2>
             <p className="text-xs sm:text-sm text-slate-400 mt-1.5">
-              Login to continue your journey
+              {isSignUp ? "Sign up to start tracking your workouts and nutrition" : "Login to continue your journey"}
             </p>
           </div>
 
@@ -310,8 +347,8 @@ export default function LoginPage() {
             </div>
           )}
 
-          {/* Segmented Tabs - Staggered Item 2 */}
-          <div className="relative flex border-b border-[#24242c] mb-6 animate-fade-in-up delay-2">
+          {/* Segmented Role Tabs */}
+          <div className="relative flex border-b border-[#24242c] mb-6 animate-fade-in-up">
             <button
               type="button"
               onClick={() => setActiveRole("client")}
@@ -331,7 +368,7 @@ export default function LoginPage() {
               Coach Login
             </button>
 
-            {/* Smooth Red Sliding Underline Indicator */}
+            {/* Red Sliding Indicator */}
             <div
               className="absolute bottom-0 h-[2px] bg-[#ff334b] transition-transform duration-300 ease-out"
               style={{
@@ -344,8 +381,8 @@ export default function LoginPage() {
           {/* Form */}
           <form onSubmit={handleFormSubmit} className="space-y-4">
             
-            {/* Username/Email Input - Staggered Item 3 */}
-            <div className="animate-fade-in-up delay-3">
+            {/* Username/Email Input */}
+            <div className="animate-fade-in-up">
               <div className="relative flex items-center">
                 <span className="absolute left-3.5 text-slate-500 pointer-events-none">
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -365,8 +402,8 @@ export default function LoginPage() {
               </div>
             </div>
 
-            {/* Password Input - Staggered Item 4 */}
-            <div className="animate-fade-in-up delay-4">
+            {/* Password Input */}
+            <div className="animate-fade-in-up">
               <div className="relative flex items-center">
                 <span className="absolute left-3.5 text-slate-500 pointer-events-none">
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -380,7 +417,7 @@ export default function LoginPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Password"
-                  autoComplete="current-password"
+                  autoComplete={isSignUp ? "new-password" : "current-password"}
                   className="w-full bg-[#18181e] border border-[#24242c] rounded-xl pl-11 pr-11 py-3 text-xs sm:text-sm text-white placeholder-slate-500 outline-none focus:border-[#ff334b] transition-all duration-200"
                 />
                 <button
@@ -404,8 +441,8 @@ export default function LoginPage() {
               </div>
             </div>
 
-            {/* Options: Remember me & Forgot password - Staggered Item 5 */}
-            <div className="flex items-center justify-between text-xs text-slate-400 pt-1 pb-1 animate-fade-in-up delay-5">
+            {/* Options: Remember me & Forgot password */}
+            <div className="flex items-center justify-between text-xs text-slate-400 pt-1 pb-1 animate-fade-in-up">
               <label className="flex items-center gap-2 cursor-pointer select-none group">
                 <input
                   type="checkbox"
@@ -416,17 +453,19 @@ export default function LoginPage() {
                 <span className="group-hover:text-slate-300 transition-colors">Remember me</span>
               </label>
 
-              <button
-                type="button"
-                onClick={() => setShowResetModal(true)}
-                className="text-[#ff334b] hover:underline font-medium transition-all"
-              >
-                Forgot Password?
-              </button>
+              {!isSignUp && (
+                <button
+                  type="button"
+                  onClick={() => setShowResetModal(true)}
+                  className="text-[#ff334b] hover:underline font-medium transition-all"
+                >
+                  Forgot Password?
+                </button>
+              )}
             </div>
 
-            {/* Primary Login Button - Staggered Item 6 */}
-            <div className="animate-fade-in-up delay-6">
+            {/* Primary Submit Button */}
+            <div className="animate-fade-in-up">
               <button
                 type="submit"
                 disabled={loading || googleLoading}
@@ -438,25 +477,25 @@ export default function LoginPage() {
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                     </svg>
-                    <span>Authenticating...</span>
+                    <span>{isSignUp ? "Creating Account..." : "Authenticating..."}</span>
                   </>
                 ) : (
-                  <span>Login</span>
+                  <span>{isSignUp ? "Create Account" : "Login"}</span>
                 )}
               </button>
             </div>
           </form>
 
-          {/* Separator - Staggered Item 7 */}
-          <div className="relative flex items-center justify-center my-6 animate-fade-in-up delay-7">
+          {/* Separator */}
+          <div className="relative flex items-center justify-center my-6 animate-fade-in-up">
             <div className="w-full border-t border-[#24242c]" />
             <span className="absolute bg-[#0d0d0d] px-3 text-[10px] font-bold text-slate-500 uppercase tracking-widest">
               or continue with
             </span>
           </div>
 
-          {/* Stark White Google OAuth Button - Staggered Item 8 */}
-          <div className="animate-fade-in-up delay-8">
+          {/* Google OAuth Button */}
+          <div className="animate-fade-in-up">
             <button
               type="button"
               onClick={handleGoogleSignIn}
@@ -468,16 +507,39 @@ export default function LoginPage() {
             </button>
           </div>
 
-          {/* Contact Text Footer - Staggered Item 9 */}
-          <div className="text-center mt-6 text-xs text-slate-500 animate-fade-in-up delay-9">
-            Don&apos;t have an account?{" "}
-            <button
-              type="button"
-              onClick={() => alert("Coach Contact: coach@ryvom.app")}
-              className="text-[#ff334b] font-medium hover:underline cursor-pointer"
-            >
-              Contact your coach.
-            </button>
+          {/* Functional Create Account Toggle Footer */}
+          <div className="text-center mt-6 text-xs text-slate-500 animate-fade-in-up">
+            {isSignUp ? (
+              <>
+                Already have an account?{" "}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsSignUp(false);
+                    setErrorMessage(null);
+                    setSuccessMessage(null);
+                  }}
+                  className="text-[#ff334b] font-medium hover:underline cursor-pointer"
+                >
+                  Log in.
+                </button>
+              </>
+            ) : (
+              <>
+                Don&apos;t have an account?{" "}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsSignUp(true);
+                    setErrorMessage(null);
+                    setSuccessMessage(null);
+                  }}
+                  className="text-[#ff334b] font-medium hover:underline cursor-pointer"
+                >
+                  Create an account.
+                </button>
+              </>
+            )}
           </div>
 
         </div>

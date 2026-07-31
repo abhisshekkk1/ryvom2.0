@@ -39,13 +39,32 @@ export default function AnalyticsPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session) {
-        router.push("/login");
-      } else {
+    async function checkAuth() {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
         setAuthChecked(true);
+        return;
       }
-    });
+
+      if (typeof window !== "undefined") {
+        const savedUser = localStorage.getItem("ryvom_user") || sessionStorage.getItem("ryvom_user");
+        if (savedUser) {
+          try {
+            const parsed = JSON.parse(savedUser);
+            if (parsed && parsed.id) {
+              setAuthChecked(true);
+              return;
+            }
+          } catch {
+            // ignore
+          }
+        }
+      }
+
+      router.push("/login");
+    }
+
+    checkAuth();
   }, [router]);
 
   // Calculate 7-day week boundaries based on offset
@@ -82,7 +101,7 @@ export default function AnalyticsPage() {
     setError(null);
     try {
       const uid = await resolveActiveUserId();
-      setActiveUserId(uid);
+      if (activeUserId !== uid) setActiveUserId(uid);
 
       // 1. Fetch Selected Week Weight Logs
       let wQuery = supabase
@@ -117,7 +136,7 @@ export default function AnalyticsPage() {
         .lte("logged_date", weekRange.priorEnd.toISOString());
 
       if (uid) pwQuery = pwQuery.eq("user_id", uid);
-      let { data: priorWData } = await pwQuery;
+      const { data: priorWData } = await pwQuery;
 
       // 3. Fetch Selected Week Lift Logs
       let lQuery = supabase
@@ -141,39 +160,39 @@ export default function AnalyticsPage() {
       const { data: priorLData } = await plQuery;
 
       // Format weights
-      const formattedSelW: WeightEntry[] = (selWData || []).map((d: any) => ({
-        id: d.id,
+      const formattedSelW: WeightEntry[] = (selWData || []).map((d: Record<string, unknown>) => ({
+        id: String(d.id),
         weight_kg: Number(d.weight_kg || d.weight),
-        logged_date: d.logged_date || d.date,
+        logged_date: String(d.logged_date || d.date),
       }));
 
-      const formattedPriorW: WeightEntry[] = (priorWData || []).map((d: any) => ({
-        id: d.id,
+      const formattedPriorW: WeightEntry[] = (priorWData || []).map((d: Record<string, unknown>) => ({
+        id: String(d.id),
         weight_kg: Number(d.weight_kg || d.weight),
-        logged_date: d.logged_date || d.date,
+        logged_date: String(d.logged_date || d.date),
       }));
 
       // Format lifts
-      const formattedSelL: LiftEntry[] = (selLData || []).map((d: any) => ({
-        id: d.id,
-        lift_type: d.lift_type,
+      const formattedSelL: LiftEntry[] = (selLData || []).map((d: Record<string, unknown>) => ({
+        id: String(d.id),
+        lift_type: (d.lift_type as "Squat" | "Bench Press" | "Deadlift") || "Squat",
         weight_kg: Number(d.weight_kg),
         sets: Number(d.sets || 1),
         reps: Number(d.reps),
-        notes: d.notes || "",
-        tags: d.tags || [],
-        logged_date: d.logged_date,
+        notes: String(d.notes || ""),
+        tags: (d.tags as string[]) || [],
+        logged_date: String(d.logged_date),
       }));
 
-      const formattedPriorL: LiftEntry[] = (priorLData || []).map((d: any) => ({
-        id: d.id,
-        lift_type: d.lift_type,
+      const formattedPriorL: LiftEntry[] = (priorLData || []).map((d: Record<string, unknown>) => ({
+        id: String(d.id),
+        lift_type: (d.lift_type as "Squat" | "Bench Press" | "Deadlift") || "Squat",
         weight_kg: Number(d.weight_kg),
         sets: Number(d.sets || 1),
         reps: Number(d.reps),
-        notes: d.notes || "",
-        tags: d.tags || [],
-        logged_date: d.logged_date,
+        notes: String(d.notes || ""),
+        tags: (d.tags as string[]) || [],
+        logged_date: String(d.logged_date),
       }));
 
       // Use sample data if database has no records yet for current range
@@ -219,16 +238,25 @@ export default function AnalyticsPage() {
       } else {
         setPriorWeekLifts(formattedPriorL);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Analytics fetch error:", err);
       setError("Failed to load weekly analytics data.");
     } finally {
       setLoading(false);
     }
-  }, [weekRange]);
+  }, [weekRange, weekOffset, activeUserId]);
 
   useEffect(() => {
-    fetchAnalyticsData();
+    let isMounted = true;
+    const load = async () => {
+      if (isMounted) {
+        await fetchAnalyticsData();
+      }
+    };
+    load();
+    return () => {
+      isMounted = false;
+    };
   }, [fetchAnalyticsData]);
 
   // Calculations for Selected Week & Prior Week
@@ -282,7 +310,7 @@ export default function AnalyticsPage() {
     };
   }, [selectedWeekWeights, priorWeekWeights, selectedWeekLifts, priorWeekLifts]);
 
-  if (!authChecked) {
+  if (!authChecked || loading) {
     return (
       <div className="min-h-screen bg-[#0b0b0e] flex items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-[#ff334b]" />

@@ -112,5 +112,17 @@ export async function resolveActiveUserId(userProp?: { id?: string; email?: stri
     return publicUser?.id || authData.session.user.id;
   }
 
+  if (typeof window !== "undefined") {
+    const savedUser = localStorage.getItem("ryvom_user") || sessionStorage.getItem("ryvom_user");
+    if (savedUser) {
+      try {
+        const parsed = JSON.parse(savedUser);
+        if (parsed?.id) return parsed.id;
+      } catch {
+        // ignore
+      }
+    }
+  }
+
   return null;
 }

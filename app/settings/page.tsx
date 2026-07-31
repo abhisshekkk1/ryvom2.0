@@ -122,7 +122,9 @@ export default function SettingsPage() {
                 email: p.email || `${p.username || "athlete"}@ryvom.local`,
                 role: p.role || "client",
               });
-            } catch (e) {}
+            } catch {
+              // ignore JSON parse errors
+            }
           }
 
           const savedSet = localStorage.getItem("ryvom_user_settings");
@@ -136,7 +138,9 @@ export default function SettingsPage() {
               if (s.manual_protein) setManualProtein(Number(s.manual_protein));
               if (s.manual_carbs) setManualCarbs(Number(s.manual_carbs));
               if (s.manual_fats) setManualFats(Number(s.manual_fats));
-            } catch (e) {}
+            } catch {
+              // ignore JSON parse errors
+            }
           }
         }
 
@@ -165,7 +169,7 @@ export default function SettingsPage() {
         if (latestWeightData?.weight) {
           setBodyWeightKg(Number(latestWeightData.weight));
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error("Fetch error:", err);
       } finally {
         setLoading(false);
@@ -186,7 +190,7 @@ export default function SettingsPage() {
     setActiveUserId(uid);
 
     // Save valid columns to Supabase user_settings
-    const payload: any = {
+    const payload: Record<string, unknown> = {
       user_id: uid || null,
       target_calories: activeCalories,
       target_protein: activeProtein,
@@ -251,9 +255,10 @@ export default function SettingsPage() {
 
       setSuccessMessage(`✓ Dynamic target settings (${activeCalories} kcal) saved to profile!`);
       setTimeout(() => setSuccessMessage(null), 4000);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Save Error:", err);
-      setErrorMessage(err.message || "Failed to save settings to profile.");
+      const msg = err instanceof Error ? err.message : "Failed to save settings to profile.";
+      setErrorMessage(msg);
     } finally {
       setSaving(false);
     }
@@ -273,7 +278,7 @@ export default function SettingsPage() {
 
     try {
       // 1. Try Supabase Auth password update
-      const { error: authErr } = await supabase.auth.updateUser({ password: newPassword });
+      await supabase.auth.updateUser({ password: newPassword });
 
       // 2. Also update custom public.users table if activeUserId is bound
       if (activeUserId) {
@@ -284,22 +289,42 @@ export default function SettingsPage() {
       setPasswordSuccess("✓ Account password updated successfully!");
       setNewPassword("");
       setTimeout(() => setPasswordSuccess(null), 4000);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Password update error:", err);
-      setPasswordError(err.message || "Failed to update password.");
+      const msg = err instanceof Error ? err.message : "Failed to update password.";
+      setPasswordError(msg);
     } finally {
       setPasswordSaving(false);
     }
   };
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session) {
-        router.push("/login");
-      } else {
+    async function checkAuth() {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
         setAuthChecked(true);
+        return;
       }
-    });
+
+      if (typeof window !== "undefined") {
+        const savedUser = localStorage.getItem("ryvom_user") || sessionStorage.getItem("ryvom_user");
+        if (savedUser) {
+          try {
+            const parsed = JSON.parse(savedUser);
+            if (parsed && parsed.id) {
+              setAuthChecked(true);
+              return;
+            }
+          } catch {
+            // ignore
+          }
+        }
+      }
+
+      router.push("/login");
+    }
+
+    checkAuth();
   }, [router]);
 
   if (!authChecked) {
@@ -449,7 +474,7 @@ export default function SettingsPage() {
                       </label>
                       <select
                         value={activityLevel}
-                        onChange={(e: any) => setActivityLevel(e.target.value)}
+                        onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setActivityLevel(e.target.value as "sedentary" | "moderate" | "active" | "very_active")}
                         className="w-full bg-[#121216] border border-zinc-800 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-[#ff334b] transition"
                       >
                         <option value="sedentary">Sedentary (Office Job)</option>

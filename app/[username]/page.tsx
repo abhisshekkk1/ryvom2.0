@@ -21,7 +21,7 @@ export default async function PublicProfilePage(props: PublicProfileProps) {
   // 1. ISOLATE THE PROFILE FETCH:
   // Fetch ONLY the user from user_settings matching the username
   let profile: PublicProfileData | null = null;
-  let profileError: any = null;
+  let profileError: unknown = null;
 
   try {
     const { data, error } = await supabase
@@ -241,7 +241,7 @@ export default async function PublicProfilePage(props: PublicProfileProps) {
             </div>
 
             <p className="text-xs sm:text-sm text-zinc-300 max-w-md mx-auto leading-relaxed italic">
-              "{profile.bio || "Documenting strength highlights and physical trajectory."}"
+              &quot;{profile.bio || "Documenting strength highlights and physical trajectory."}&quot;
             </p>
           </div>
         </section>

@@ -26,15 +26,15 @@ const sarcasticErrors = [
 ];
 
 interface ManualLiftLoggerProps {
-  user?: any;
-  onLiftLogged?: (entry: any) => void;
+  user?: { id?: string; email?: string; username?: string; role?: string } | null;
+  onLiftLogged?: (entry: Record<string, unknown>) => void;
 }
 
 export default function ManualLiftLogger({ user, onLiftLogged }: ManualLiftLoggerProps) {
   const [liftType, setLiftType] = useState<LiftType>("Squat");
   const [weightKg, setWeightKg] = useState<string>("");
   const [reps, setReps] = useState<number>(1);
-  const [logDate, setLogDate] = useState<string>(new Date().toISOString().split("T")[0]);
+  const [logDate] = useState<string>(new Date().toISOString().split("T")[0]);
 
   const [saving, setSaving] = useState<boolean>(false);
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
@@ -102,9 +102,10 @@ export default function ManualLiftLogger({ user, onLiftLogged }: ManualLiftLogge
       }
 
       setTimeout(() => setFeedbackMessage(null), 4000);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Save lift error:", err);
-      setErrorMessage(err.message || "Failed to log lift entry.");
+      const msg = err instanceof Error ? err.message : "Failed to log lift entry.";
+      setErrorMessage(msg);
     } finally {
       setSaving(false);
     }
