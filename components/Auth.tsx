@@ -97,7 +97,7 @@ export default function Auth({ onLoginSuccess }: { onLoginSuccess?: (user: UserS
     try {
       if (isSignUp) {
         const { error, data } = await supabaseBrowser.auth.signUp({
-          email: identifier.includes("@") ? identifier : `${identifier}@ryvom.app`,
+          email: identifier,
           password,
         });
 
@@ -123,7 +123,7 @@ export default function Auth({ onLoginSuccess }: { onLoginSuccess?: (user: UserS
         }
       } else {
         const { error, data } = await supabaseBrowser.auth.signInWithPassword({
-          email: identifier.includes("@") ? identifier : `${identifier}@ryvom.app`,
+          email: identifier,
           password,
         });
 
@@ -207,14 +207,14 @@ export default function Auth({ onLoginSuccess }: { onLoginSuccess?: (user: UserS
         <form onSubmit={handleAuth} className="space-y-4">
           <div>
             <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">
-              Username or Email
+              Email Address
             </label>
             <input
-              type="text"
+              type="email"
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="e.g. johndoe or john@example.com"
+              placeholder="Email Address"
               className="w-full bg-[#0b0b0e] border border-zinc-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#ff334b] transition placeholder-zinc-500 font-medium"
             />
           </div>

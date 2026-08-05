@@ -6,6 +6,7 @@ import { resolveActiveUserId } from "@/lib/userHelper";
 import WeightTracker from "@/components/WeightTracker";
 import WeightLogger from "@/components/WeightLogger";
 import ManualLiftLogger from "@/components/ManualLiftLogger";
+import SupplementCalculator from "@/components/SupplementCalculator";
 
 // Fallback default targets
 export const DEFAULT_TARGETS = {
@@ -747,6 +748,9 @@ export default function Dashboard({ user, onNavigateToNutrition, onNavigateToStr
 
             <ManualLiftLogger user={user} />
           </div>
+
+          {/* Section: Supplement Calculator */}
+          <SupplementCalculator />
 
           </>
       )}

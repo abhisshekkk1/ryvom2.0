@@ -8,6 +8,7 @@ import Dashboard from "@/components/Dashboard";
 import StrengthTracker from "@/components/StrengthTracker";
 import RecipeBuilder from "@/components/RecipeBuilder";
 import ManualLiftLogger from "@/components/ManualLiftLogger";
+import SupplementCalculator from "@/components/SupplementCalculator";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { getOrCreatePublicUser, fileToBase64 } from "@/lib/userHelper";
 
@@ -278,120 +279,124 @@ export default function Home() {
         );
       case "nutrition":
         return (
-          <div className="p-8 rounded-2xl bg-[#121216] border border-zinc-800/50 shadow-xl space-y-6 max-w-2xl mx-auto">
-            <div className="flex items-center gap-3 border-b border-zinc-800/80 pb-4">
-              <div className="w-10 h-10 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center text-xl">
-                🤖
-              </div>
-              <div>
-                <h3 className="text-xl font-extrabold text-white tracking-tight">AI Nutrition Tracker</h3>
-                <p className="text-xs text-zinc-400">Describe or scan your food for instant macro calculations</p>
-              </div>
-            </div>
-            
-            {nutritionSuccess && (
-              <div className="p-4 rounded-xl text-xs font-medium border bg-emerald-950/20 border-emerald-800/50 text-emerald-400 whitespace-pre-line">
-                {nutritionSuccess}
-              </div>
-            )}
+          <div className="space-y-8 max-w-4xl mx-auto">
+            <SupplementCalculator />
 
-            {nutritionError && (
-              <div className="p-4 rounded-xl text-xs font-medium border bg-red-950/20 border-red-900/50 text-[#ff334b]">
-                {nutritionError}
-              </div>
-            )}
-
-            <form onSubmit={handleCalculateAndLog} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">Meal Name</label>
-                <input
-                  type="text"
-                  value={mealName}
-                  onChange={(e) => setMealName(e.target.value)}
-                  placeholder="e.g. Breakfast, Post-Workout"
-                  className="w-full bg-[#0b0b0e] border border-zinc-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-red-500 transition"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">Food Photo or Label (Camera / File)</label>
-                <input
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0] || null;
-                    setImageFile(file);
-                    if (file) {
-                      const url = URL.createObjectURL(file);
-                      setImagePreview(url);
-                    } else {
-                      setImagePreview(null);
-                    }
-                  }}
-                  className="w-full bg-[#0b0b0e] border border-zinc-800 rounded-xl px-4 py-2.5 text-xs text-zinc-300 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-[#ff334b] file:text-white hover:file:bg-[#e02d41] transition cursor-pointer"
-                />
-                {imagePreview && (
-                  <div className="mt-3 relative inline-block">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={imagePreview} alt="Food Preview" className="w-24 h-24 object-cover rounded-xl border border-zinc-700 shadow-md" />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setImageFile(null);
-                        setImagePreview(null);
-                      }}
-                      className="absolute -top-2 -right-2 bg-red-600 hover:bg-red-700 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold shadow-md"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">What did you eat? (Optional if photo attached)</label>
-                <input
-                  type="text"
-                  value={foodItem}
-                  onChange={(e) => setFoodItem(e.target.value)}
-                  placeholder="e.g. 4 scrambled eggs and avocado"
-                  className="w-full bg-[#0b0b0e] border border-zinc-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-red-500 transition"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">State</label>
-                  <select
-                    value={foodState}
-                    onChange={(e) => setFoodState(e.target.value)}
-                    className="w-full bg-[#0b0b0e] border border-zinc-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-red-500 transition"
-                  >
-                    <option value="Raw">Raw</option>
-                    <option value="Cooked">Cooked</option>
-                  </select>
+            <div className="p-8 rounded-2xl bg-[#121216] border border-zinc-800/50 shadow-xl space-y-6 max-w-2xl mx-auto">
+              <div className="flex items-center gap-3 border-b border-zinc-800/80 pb-4">
+                <div className="w-10 h-10 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center text-xl">
+                  🤖
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">Weight (g)</label>
+                  <h3 className="text-xl font-extrabold text-white tracking-tight">AI Nutrition Tracker</h3>
+                  <p className="text-xs text-zinc-400">Describe or scan your food for instant macro calculations</p>
+                </div>
+              </div>
+              
+              {nutritionSuccess && (
+                <div className="p-4 rounded-xl text-xs font-medium border bg-emerald-950/20 border-emerald-800/50 text-emerald-400 whitespace-pre-line">
+                  {nutritionSuccess}
+                </div>
+              )}
+
+              {nutritionError && (
+                <div className="p-4 rounded-xl text-xs font-medium border bg-red-950/20 border-red-900/50 text-[#ff334b]">
+                  {nutritionError}
+                </div>
+              )}
+
+              <form onSubmit={handleCalculateAndLog} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">Meal Name</label>
                   <input
-                    type="number"
-                    value={weightG}
-                    onChange={(e) => setWeightG(Number(e.target.value))}
-                    min="1"
+                    type="text"
+                    value={mealName}
+                    onChange={(e) => setMealName(e.target.value)}
+                    placeholder="e.g. Breakfast, Post-Workout"
                     className="w-full bg-[#0b0b0e] border border-zinc-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-red-500 transition"
                   />
                 </div>
-              </div>
 
-              <button
-                type="submit"
-                disabled={nutritionLoading}
-                className="w-full py-4 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 disabled:from-red-600/50 disabled:to-red-700/50 text-white font-bold rounded-xl transition shadow-lg shadow-red-950/20 active:scale-[0.98]"
-              >
-                {nutritionLoading ? "Calculating with AI..." : "Calculate & Log with AI"}
-              </button>
-            </form>
+                <div>
+                  <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">Food Photo or Label (Camera / File)</label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0] || null;
+                      setImageFile(file);
+                      if (file) {
+                        const url = URL.createObjectURL(file);
+                        setImagePreview(url);
+                      } else {
+                        setImagePreview(null);
+                      }
+                    }}
+                    className="w-full bg-[#0b0b0e] border border-zinc-800 rounded-xl px-4 py-2.5 text-xs text-zinc-300 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-[#ff334b] file:text-white hover:file:bg-[#e02d41] transition cursor-pointer"
+                  />
+                  {imagePreview && (
+                    <div className="mt-3 relative inline-block">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={imagePreview} alt="Food Preview" className="w-24 h-24 object-cover rounded-xl border border-zinc-700 shadow-md" />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setImageFile(null);
+                          setImagePreview(null);
+                        }}
+                        className="absolute -top-2 -right-2 bg-red-600 hover:bg-red-700 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold shadow-md"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">What did you eat? (Optional if photo attached)</label>
+                  <input
+                    type="text"
+                    value={foodItem}
+                    onChange={(e) => setFoodItem(e.target.value)}
+                    placeholder="e.g. 4 scrambled eggs and avocado"
+                    className="w-full bg-[#0b0b0e] border border-zinc-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-red-500 transition"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">State</label>
+                    <select
+                      value={foodState}
+                      onChange={(e) => setFoodState(e.target.value)}
+                      className="w-full bg-[#0b0b0e] border border-zinc-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-red-500 transition"
+                    >
+                      <option value="Raw">Raw</option>
+                      <option value="Cooked">Cooked</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">Weight (g)</label>
+                    <input
+                      type="number"
+                      value={weightG}
+                      onChange={(e) => setWeightG(Number(e.target.value))}
+                      min="1"
+                      className="w-full bg-[#0b0b0e] border border-zinc-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-red-500 transition"
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={nutritionLoading}
+                  className="w-full py-4 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 disabled:from-red-600/50 disabled:to-red-700/50 text-white font-bold rounded-xl transition shadow-lg shadow-red-950/20 active:scale-[0.98]"
+                >
+                  {nutritionLoading ? "Calculating with AI..." : "Calculate & Log with AI"}
+                </button>
+              </form>
+            </div>
           </div>
         );
       default:

@@ -28,9 +28,9 @@ const GoogleIcon = () => (
 );
 
 export default function LoginPage() {
-  const [activeRole, setActiveRole] = useState<"client" | "coach">("client");
-  const [isSignUp, setIsSignUp] = useState(false);
-  const [usernameOrEmail, setUsernameOrEmail] = useState("");
+  const [authMode, setAuthMode] = useState<"login" | "signup">("login");
+  const isSignUp = authMode === "signup";
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
@@ -38,7 +38,7 @@ export default function LoginPage() {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [showResetModal, setShowResetModal] = useState(false);
+  const [resetSuccessMessage, setResetSuccessMessage] = useState<string | null>(null);
 
   // Read URL query parameters for error messages safely on mount
   useEffect(() => {
@@ -86,6 +86,38 @@ export default function LoginPage() {
     }
   };
 
+  // Handle Forgot Password reset link email
+  const handleForgotPassword = async () => {
+    const targetEmail = email.trim();
+    if (!targetEmail) {
+      setErrorMessage("Please enter your email address first to reset your password.");
+      setResetSuccessMessage(null);
+      return;
+    }
+
+    setLoading(true);
+    setErrorMessage(null);
+    setSuccessMessage(null);
+    setResetSuccessMessage(null);
+
+    try {
+      const supabaseBrowser = getSupabaseBrowser();
+      const { error } = await supabaseBrowser.auth.resetPasswordForEmail(targetEmail, {
+        redirectTo: `${window.location.origin}/auth/callback?next=/settings/update-password`,
+      });
+
+      if (error) throw error;
+
+      setResetSuccessMessage("Password reset link sent to your email!");
+    } catch (err: unknown) {
+      console.error("Password reset error:", err);
+      const msg = err instanceof Error ? err.message : "Failed to send password reset email.";
+      setErrorMessage(msg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Handle form login or sign up
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -93,9 +125,9 @@ export default function LoginPage() {
     setErrorMessage(null);
     setSuccessMessage(null);
 
-    const identifier = usernameOrEmail.trim();
-    if (!identifier || !password) {
-      setErrorMessage("Please enter both username/email and password.");
+    const targetEmail = email.trim();
+    if (!targetEmail || !password) {
+      setErrorMessage("Please enter both email address and password.");
       setLoading(false);
       return;
     }
@@ -116,7 +148,7 @@ export default function LoginPage() {
       if (isSignUp) {
         // Sign Up flow using Supabase Auth with cookie persistence
         const { data, error } = await supabaseBrowser.auth.signUp({
-          email: identifier.includes("@") ? identifier : `${identifier}@ryvom.app`,
+          email: targetEmail,
           password,
         });
 
@@ -126,9 +158,9 @@ export default function LoginPage() {
           const publicUser = await getOrCreatePublicUser(data.user);
           const userObj = {
             id: publicUser?.id || data.user.id,
-            email: data.user.email,
-            username: publicUser?.username || identifier.split("@")[0],
-            role: publicUser?.role || activeRole,
+            email: data.user.email || targetEmail,
+            username: publicUser?.username || targetEmail.split("@")[0],
+            role: publicUser?.role || "client",
           };
           activeStorage.setItem("ryvom_user", JSON.stringify(userObj));
           document.cookie = "ryvom_user=true; path=/; max-age=31536000; SameSite=Lax";
@@ -138,63 +170,24 @@ export default function LoginPage() {
           }, 300);
         } else {
           setSuccessMessage("Account created! Please sign in with your new credentials.");
-          setIsSignUp(false);
+          setAuthMode("login");
         }
       } else {
-        // Sign In flow using Supabase Auth with cookie persistence & fallback resolution
-        const targetEmail = identifier.includes("@") ? identifier : `${identifier}@ryvom.app`;
-        const cleanUsername = identifier.includes("@") ? identifier.split("@")[0].toLowerCase() : identifier.toLowerCase();
-        let authUser: { id: string; email?: string; username?: string; role?: string } | null = null;
-
-        // 1. Try Supabase Auth password sign-in
+        // Sign In flow using Supabase Auth
         const { data, error } = await supabaseBrowser.auth.signInWithPassword({
           email: targetEmail,
           password,
         });
 
-        if (!error && data?.user) {
-          authUser = data.user;
-        } else {
-          // 2. Check public.users table for matching username/id
-          const { data: dbUser } = await supabaseBrowser
-            .from("users")
-            .select("id, username, role")
-            .or(`username.eq.${cleanUsername},id.eq.${identifier}`)
-            .maybeSingle();
+        if (error) throw error;
 
-          if (dbUser) {
-            authUser = {
-              id: dbUser.id,
-              email: targetEmail,
-              username: dbUser.username,
-              role: dbUser.role || activeRole,
-            };
-          } else {
-            // 3. Attempt auto-signup for new credentials
-            const { data: signUpData, error: signUpError } = await supabaseBrowser.auth.signUp({
-              email: targetEmail,
-              password,
-            });
-
-            if (signUpData?.user) {
-              authUser = signUpData.user;
-            } else if (signUpError?.message?.includes("already registered")) {
-              throw new Error("Incorrect password. Please verify your password or click 'Forgot Password?'.");
-            } else if (error) {
-              throw error;
-            } else if (signUpError) {
-              throw signUpError;
-            }
-          }
-        }
-
-        if (authUser) {
-          const publicUser = await getOrCreatePublicUser(authUser);
+        if (data?.user) {
+          const publicUser = await getOrCreatePublicUser(data.user);
           const userObj = {
-            id: publicUser?.id || authUser.id,
-            email: authUser.email || targetEmail,
-            username: publicUser?.username || cleanUsername || "Athlete",
-            role: publicUser?.role || activeRole,
+            id: publicUser?.id || data.user.id,
+            email: data.user.email || targetEmail,
+            username: publicUser?.username || targetEmail.split("@")[0] || "Athlete",
+            role: publicUser?.role || "client",
           };
           activeStorage.setItem("ryvom_user", JSON.stringify(userObj));
           document.cookie = "ryvom_user=true; path=/; max-age=31536000; SameSite=Lax";
@@ -208,7 +201,7 @@ export default function LoginPage() {
       console.error("Auth error:", err);
       let msg = err instanceof Error ? err.message : "Authentication failed. Please check your credentials.";
       if (msg.includes("Invalid login credentials") || msg.includes("User not found")) {
-        msg = "Incorrect username/email or password. If you don't have an account yet, click 'Create an account' below.";
+        msg = "Incorrect email address or password. If you don't have an account yet, click 'Create an account' below.";
       }
       setErrorMessage(msg);
     } finally {
@@ -389,25 +382,35 @@ export default function LoginPage() {
             </div>
           )}
 
-          {/* Segmented Role Tabs */}
+          {/* Segmented Auth Mode Tabs */}
           <div className="relative flex border-b border-[#24242c] mb-6 animate-fade-in-up">
             <button
               type="button"
-              onClick={() => setActiveRole("client")}
+              onClick={() => {
+                setAuthMode("login");
+                setErrorMessage(null);
+                setSuccessMessage(null);
+                setResetSuccessMessage(null);
+              }}
               className={`flex-1 py-3 text-center text-xs font-bold transition-colors duration-200 cursor-pointer ${
-                activeRole === "client" ? "text-[#ff334b]" : "text-slate-500 hover:text-slate-300"
+                authMode === "login" ? "text-[#ff334b]" : "text-slate-500 hover:text-slate-300"
               }`}
             >
-              Client Login
+              Login
             </button>
             <button
               type="button"
-              onClick={() => setActiveRole("coach")}
+              onClick={() => {
+                setAuthMode("signup");
+                setErrorMessage(null);
+                setSuccessMessage(null);
+                setResetSuccessMessage(null);
+              }}
               className={`flex-1 py-3 text-center text-xs font-bold transition-colors duration-200 cursor-pointer ${
-                activeRole === "coach" ? "text-[#ff334b]" : "text-slate-500 hover:text-slate-300"
+                authMode === "signup" ? "text-[#ff334b]" : "text-slate-500 hover:text-slate-300"
               }`}
             >
-              Coach Login
+              Sign Up
             </button>
 
             {/* Red Sliding Indicator */}
@@ -415,7 +418,7 @@ export default function LoginPage() {
               className="absolute bottom-0 h-[2px] bg-[#ff334b] transition-transform duration-300 ease-out"
               style={{
                 width: "50%",
-                transform: activeRole === "client" ? "translateX(0%)" : "translateX(100%)",
+                transform: authMode === "login" ? "translateX(0%)" : "translateX(100%)",
               }}
             />
           </div>
@@ -423,25 +426,39 @@ export default function LoginPage() {
           {/* Form */}
           <form onSubmit={handleFormSubmit} className="space-y-4">
             
-            {/* Username/Email Input */}
+            {/* Email Address Input */}
             <div className="animate-fade-in-up">
               <div className="relative flex items-center">
                 <span className="absolute left-3.5 text-slate-500 pointer-events-none">
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                    <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
-                    <circle cx="12" cy="7" r="4" />
+                    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+                    <polyline points="22,6 12,13 2,6" />
                   </svg>
                 </span>
                 <input
-                  type="text"
+                  type="email"
                   required
-                  value={usernameOrEmail}
-                  onChange={(e) => setUsernameOrEmail(e.target.value)}
-                  placeholder="Username or Email"
-                  autoComplete="username"
+                  value={email}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    setResetSuccessMessage(null);
+                  }}
+                  placeholder="Email Address"
+                  autoComplete="email"
                   className="w-full bg-[#18181e] border border-[#24242c] rounded-xl pl-11 pr-4 py-3 text-xs sm:text-sm text-white placeholder-slate-500 outline-none focus:border-[#ff334b] transition-all duration-200"
                 />
               </div>
+
+              {/* Inline Reset Success Message */}
+              {resetSuccessMessage && (
+                <p className="text-xs text-emerald-400 font-medium mt-1.5 flex items-center gap-1.5 animate-fade-in-up">
+                  <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                    <polyline points="22 4 12 14.01 9 11.01" />
+                  </svg>
+                  <span>{resetSuccessMessage}</span>
+                </p>
+              )}
             </div>
 
             {/* Password Input */}
@@ -495,11 +512,11 @@ export default function LoginPage() {
                 <span className="group-hover:text-slate-300 transition-colors">Remember me</span>
               </label>
 
-              {!isSignUp && (
+              {authMode === "login" && (
                 <button
                   type="button"
-                  onClick={() => setShowResetModal(true)}
-                  className="text-[#ff334b] hover:underline font-medium transition-all"
+                  onClick={handleForgotPassword}
+                  className="text-[#ff334b] hover:underline font-medium transition-all cursor-pointer"
                 >
                   Forgot Password?
                 </button>
@@ -522,7 +539,7 @@ export default function LoginPage() {
                     <span>{isSignUp ? "Creating Account..." : "Authenticating..."}</span>
                   </>
                 ) : (
-                  <span>{isSignUp ? "Create Account" : "Login"}</span>
+                  <span>{authMode === "login" ? "Login" : "Sign Up"}</span>
                 )}
               </button>
             </div>
@@ -551,13 +568,13 @@ export default function LoginPage() {
 
           {/* Functional Create Account Toggle Footer */}
           <div className="text-center mt-6 text-xs text-slate-500 animate-fade-in-up">
-            {isSignUp ? (
+            {authMode === "signup" ? (
               <>
                 Already have an account?{" "}
                 <button
                   type="button"
                   onClick={() => {
-                    setIsSignUp(false);
+                    setAuthMode("login");
                     setErrorMessage(null);
                     setSuccessMessage(null);
                   }}
@@ -572,7 +589,7 @@ export default function LoginPage() {
                 <button
                   type="button"
                   onClick={() => {
-                    setIsSignUp(true);
+                    setAuthMode("signup");
                     setErrorMessage(null);
                     setSuccessMessage(null);
                   }}
@@ -622,28 +639,6 @@ export default function LoginPage() {
         </div>
 
       </div>
-
-      {/* Reset Password Modal */}
-      {showResetModal && (
-        <div className="fixed inset-0 z-50 bg-[#0d0d0d]/90 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in-up">
-          <div className="bg-[#111116] border border-[#24242c] rounded-2xl p-6 sm:p-8 max-w-md w-full text-center shadow-2xl space-y-4">
-            <div className="text-3xl">🔑</div>
-            <h3 className="text-lg font-extrabold text-white">Reset Password</h3>
-            <p className="text-xs text-slate-400 leading-relaxed">
-              Automated password resets are restricted for client security.
-              <br /><br />
-              Please contact <strong className="text-white">Coach Abhishek</strong> to verify your identity and receive a temporary login access key.
-            </p>
-            <button
-              type="button"
-              onClick={() => setShowResetModal(false)}
-              className="w-full py-2.5 bg-gradient-to-r from-[#ff334b] to-[#c62828] text-white font-bold text-xs rounded-xl shadow-md hover:opacity-90 transition-opacity cursor-pointer mt-2"
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      )}
 
     </div>
   );
