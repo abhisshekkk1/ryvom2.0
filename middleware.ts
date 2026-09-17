@@ -1,9 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
+const COACH_EMAIL = "abhishek0442@gmail.com";
+
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
-
   const pathname = request.nextUrl.pathname;
 
   const supabase = createServerClient(
@@ -11,21 +12,15 @@ export async function middleware(request: NextRequest) {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        getAll() {
-          return request.cookies.getAll();
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
-          );
+        getAll: () => request.cookies.getAll(),
+        setAll: (cookiesToSet) => {
+          cookiesToSet.forEach(({ name, value, options }) => supabaseResponse.cookies.set(name, value, options));
         },
       },
     },
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { data: { user } } = await supabase.auth.getUser();
 
   const isPublicPath =
     pathname.startsWith("/login") ||
@@ -36,16 +31,10 @@ export async function middleware(request: NextRequest) {
     pathname === "/manifest.webmanifest" ||
     /\.(png|jpg|jpeg|svg|webp|gif|css|js)$/.test(pathname);
 
-  if (isPublicPath) {
-    return supabaseResponse;
-  }
+  if (isPublicPath) return supabaseResponse;
 
-  const allCookies = request.cookies.getAll();
-  const hasAuthCookie = allCookies.some(
-    (c) => c.name.startsWith("sb-") || c.name === "ryvom_user"
-  );
-
-  if (!user && !hasAuthCookie) {
+  if (!user || user.email?.toLowerCase() !== COACH_EMAIL) {
+    await supabase.auth.signOut();
     const loginUrl = new URL("/login", request.url);
     return NextResponse.redirect(loginUrl);
   }
