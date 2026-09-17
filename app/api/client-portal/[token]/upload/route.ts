@@ -72,12 +72,12 @@ export async function POST(
       );
     }
 
-    // Ensure client-photos bucket exists
+    // Ensure client-photos bucket exists as private
     const { data: buckets } = await db.storage.listBuckets();
     const bucketExists = buckets?.some((b) => b.id === "client-photos");
     if (!bucketExists) {
       await db.storage.createBucket("client-photos", {
-        public: true,
+        public: false, // Strictly private bucket
         fileSizeLimit: MAX_FILE_SIZE,
       });
     }
@@ -103,13 +103,18 @@ export async function POST(
       );
     }
 
-    const { data: publicUrlData } = db.storage
+    // Generate a temporary signed URL for immediate secure preview (valid 2 hours)
+    const { data: signedData, error: signErr } = await db.storage
       .from("client-photos")
-      .getPublicUrl(filePath);
+      .createSignedUrl(filePath, 7200);
+
+    if (signErr) {
+      console.error("Sign URL error:", signErr);
+    }
 
     return NextResponse.json({
       ok: true,
-      url: publicUrlData.publicUrl,
+      url: signedData?.signedUrl || filePath,
       path: filePath,
     });
   } catch (e: unknown) {

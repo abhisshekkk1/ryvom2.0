@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
+import Image from "next/image";
 import {
   ArrowLeft,
   ChevronDown,
@@ -205,6 +206,15 @@ export default function ClientProfilePage() {
       method: "DELETE",
     });
     if (!res.ok) throw new Error("Failed to delete metric");
+    await loadData();
+  };
+
+  const handleDeleteLog = async (logId: string) => {
+    const res = await fetch(`/api/clients/${id}/performance/log?logId=${logId}`, {
+      method: "DELETE",
+    });
+    if (!res.ok) throw new Error("Failed to delete performance log");
+    notify("Performance entry deleted", "success");
     await loadData();
   };
 
@@ -787,6 +797,7 @@ export default function ClientProfilePage() {
             onAddMetric={handleAddMetric}
             onLogPerformance={handleLogPerformance}
             onDeleteMetric={handleDeleteMetric}
+            onDeleteLog={handleDeleteLog}
           />
         )}
 
@@ -922,6 +933,59 @@ export default function ClientProfilePage() {
                               </span>
                             </div>
                           </div>
+
+                          {/* Photos Gallery Preview */}
+                          {(c.photo_front_url || c.photo_side_url || c.photo_back_url) && (
+                            <div className="bg-zinc-900/60 p-3 rounded-xl border border-zinc-800/80">
+                              <span className="text-[11px] font-semibold text-zinc-400 block mb-2">
+                                Progress Photos:
+                              </span>
+                              <div className="grid grid-cols-3 gap-2">
+                                {c.photo_front_url && (
+                                  <div className="relative aspect-[3/4] rounded-lg overflow-hidden border border-zinc-800 bg-zinc-950">
+                                    <Image
+                                      src={c.photo_front_url}
+                                      alt="Front"
+                                      fill
+                                      className="object-cover"
+                                      unoptimized
+                                    />
+                                    <span className="absolute bottom-1 left-1 text-[9px] font-bold bg-black/70 px-1.5 py-0.5 rounded text-zinc-300">
+                                      Front
+                                    </span>
+                                  </div>
+                                )}
+                                {c.photo_side_url && (
+                                  <div className="relative aspect-[3/4] rounded-lg overflow-hidden border border-zinc-800 bg-zinc-950">
+                                    <Image
+                                      src={c.photo_side_url}
+                                      alt="Side"
+                                      fill
+                                      className="object-cover"
+                                      unoptimized
+                                    />
+                                    <span className="absolute bottom-1 left-1 text-[9px] font-bold bg-black/70 px-1.5 py-0.5 rounded text-zinc-300">
+                                      Side
+                                    </span>
+                                  </div>
+                                )}
+                                {c.photo_back_url && (
+                                  <div className="relative aspect-[3/4] rounded-lg overflow-hidden border border-zinc-800 bg-zinc-950">
+                                    <Image
+                                      src={c.photo_back_url}
+                                      alt="Back"
+                                      fill
+                                      className="object-cover"
+                                      unoptimized
+                                    />
+                                    <span className="absolute bottom-1 left-1 text-[9px] font-bold bg-black/70 px-1.5 py-0.5 rounded text-zinc-300">
+                                      Back
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
 
                           {c.client_notes && (
                             <div className="bg-zinc-900 p-3 rounded-lg text-xs">

@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCoachAuth } from "@/lib/supabase/server";
+import { createAdminSupabase } from "@/lib/supabase/admin";
+import { attachSignedPhotoUrlsToCheckins } from "@/lib/photoStorage";
 
 // GET /api/clients/[id] — get a single client with all check-ins and reviews
 export async function GET(
@@ -21,11 +23,19 @@ export async function GET(
   if (error || !client)
     return NextResponse.json({ error: "Client not found" }, { status: 404 });
 
-  const { data: checkins } = await supabase
+  const { data: rawCheckins } = await supabase
     .from("check_ins")
     .select("*")
     .eq("client_id", id)
     .order("week_ending", { ascending: false });
+
+  // Resolve private photo paths to temporary signed URLs
+  const adminDb = createAdminSupabase();
+  const checkins = await attachSignedPhotoUrlsToCheckins(
+    adminDb,
+    rawCheckins || [],
+    id
+  );
 
   const checkinIds = (checkins || []).map((c) => c.id);
   let reviews: Record<string, unknown>[] = [];
@@ -103,6 +113,20 @@ export async function DELETE(
   const { supabase, user } = await getCoachAuth();
   if (!supabase || !user)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  // Check if client exists and is not self profile
+  const { data: client } = await supabase
+    .from("clients")
+    .select("is_self")
+    .eq("id", id)
+    .eq("coach_user_id", user.id)
+    .single();
+
+  if (!client)
+    return NextResponse.json({ error: "Client not found" }, { status: 404 });
+
+  if (client.is_self)
+    return NextResponse.json({ error: "Cannot delete coach personal profile" }, { status: 400 });
 
   const { error } = await supabase
     .from("clients")

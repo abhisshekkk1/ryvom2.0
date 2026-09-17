@@ -23,6 +23,7 @@ interface PerformanceTrackerProps {
     notes?: string;
   }) => Promise<void>;
   onDeleteMetric?: (metricId: string) => Promise<void>;
+  onDeleteLog?: (logId: string) => Promise<void>;
 }
 
 export default function PerformanceTracker({
@@ -30,6 +31,7 @@ export default function PerformanceTracker({
   onAddMetric,
   onLogPerformance,
   onDeleteMetric,
+  onDeleteLog,
 }: PerformanceTrackerProps) {
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedMetricId, setSelectedMetricId] = useState<string | null>(
@@ -270,13 +272,29 @@ export default function PerformanceTracker({
                               </span>
                             )}
                           </div>
-                          <span className="text-[11px] text-zinc-500">
-                            {new Date(log.logged_date).toLocaleDateString("en-GB", {
-                              day: "numeric",
-                              month: "short",
-                              year: "numeric",
-                            })}
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[11px] text-zinc-500">
+                              {new Date(log.logged_date).toLocaleDateString("en-GB", {
+                                day: "numeric",
+                                month: "short",
+                                year: "numeric",
+                              })}
+                            </span>
+                            {onDeleteLog && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (confirm("Delete this log entry?")) {
+                                    onDeleteLog(log.id);
+                                  }
+                                }}
+                                className="text-zinc-600 hover:text-rose-400 p-0.5 rounded transition-colors cursor-pointer"
+                                title="Delete log entry"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            )}
+                          </div>
                         </div>
                       ))
                     )}

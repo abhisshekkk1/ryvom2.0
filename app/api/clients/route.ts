@@ -16,6 +16,7 @@ export async function GET(request: Request) {
     .select("*")
     .eq("coach_user_id", user.id)
     .eq("active", !showArchived)
+    .eq("is_self", false)
     .order("full_name");
 
   if (error) {

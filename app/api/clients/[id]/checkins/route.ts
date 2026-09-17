@@ -1,5 +1,11 @@
 import { NextResponse } from "next/server";
 import { getCoachAuth } from "@/lib/supabase/server";
+import { createAdminSupabase } from "@/lib/supabase/admin";
+import {
+  extractPhotoPath,
+  validatePhotoOwnership,
+  attachSignedPhotoUrlsToCheckins,
+} from "@/lib/photoStorage";
 
 // GET /api/clients/[id]/checkins — fetch all check-ins for a client
 export async function GET(
@@ -24,7 +30,7 @@ export async function GET(
     return NextResponse.json({ error: "Client not found" }, { status: 404 });
   }
 
-  const { data: checkins, error } = await supabase
+  const { data: rawCheckins, error } = await supabase
     .from("check_ins")
     .select("*")
     .eq("client_id", id)
@@ -33,6 +39,13 @@ export async function GET(
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  const adminDb = createAdminSupabase();
+  const checkins = await attachSignedPhotoUrlsToCheckins(
+    adminDb,
+    rawCheckins || [],
+    id
+  );
 
   return NextResponse.json({ checkins: checkins || [] });
 }
@@ -66,6 +79,22 @@ export async function POST(
     return NextResponse.json({ error: "week_ending date is required" }, { status: 400 });
   }
 
+  // Extract and validate photo storage paths
+  const frontPath = extractPhotoPath(body.photo_front_url);
+  const sidePath = extractPhotoPath(body.photo_side_url);
+  const backPath = extractPhotoPath(body.photo_back_url);
+
+  if (
+    !validatePhotoOwnership(frontPath, id) ||
+    !validatePhotoOwnership(sidePath, id) ||
+    !validatePhotoOwnership(backPath, id)
+  ) {
+    return NextResponse.json(
+      { error: "Unauthorized photo path detected." },
+      { status: 403 }
+    );
+  }
+
   const payload = {
     client_id: id,
     week_ending: body.week_ending,
@@ -80,9 +109,9 @@ export async function POST(
     energy: body.energy ?? null,
     stress: body.stress ?? null,
     client_notes: body.client_notes?.trim() || null,
-    photo_front_url: body.photo_front_url || null,
-    photo_side_url: body.photo_side_url || null,
-    photo_back_url: body.photo_back_url || null,
+    photo_front_url: frontPath,
+    photo_side_url: sidePath,
+    photo_back_url: backPath,
     status: body.status || "reviewed", // if coach logs it directly, defaults to reviewed
   };
 

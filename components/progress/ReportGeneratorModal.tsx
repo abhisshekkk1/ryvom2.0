@@ -441,16 +441,45 @@ export default function ReportGeneratorModal({
       ].join("\n");
       zip.file("checkins_data.csv", csv);
 
-      // 3. Photo links manifest
-      const photoLinks = checkIns
-        .filter((c) => c.photo_front_url || c.photo_side_url || c.photo_back_url)
-        .map((c) => ({
-          date: c.week_ending,
-          front: c.photo_front_url,
-          side: c.photo_side_url,
-          back: c.photo_back_url,
-        }));
-      zip.file("photo_links.json", JSON.stringify(photoLinks, null, 2));
+      // 3. Photo files and manifest
+      const photosFolder = zip.folder("photos");
+      const photoLinks = [];
+      for (const c of checkIns) {
+        if (c.photo_front_url || c.photo_side_url || c.photo_back_url) {
+          photoLinks.push({
+            date: c.week_ending,
+            front: c.photo_front_url,
+            side: c.photo_side_url,
+            back: c.photo_back_url,
+          });
+
+          if (c.photo_front_url && photosFolder) {
+            try {
+              const res = await fetch(c.photo_front_url);
+              if (res.ok) photosFolder.file(`${c.week_ending}_front.jpg`, await res.blob());
+            } catch {
+              // Gracefully handle any network image fetch failure
+            }
+          }
+          if (c.photo_side_url && photosFolder) {
+            try {
+              const res = await fetch(c.photo_side_url);
+              if (res.ok) photosFolder.file(`${c.week_ending}_side.jpg`, await res.blob());
+            } catch {
+              // Gracefully handle any network image fetch failure
+            }
+          }
+          if (c.photo_back_url && photosFolder) {
+            try {
+              const res = await fetch(c.photo_back_url);
+              if (res.ok) photosFolder.file(`${c.week_ending}_back.jpg`, await res.blob());
+            } catch {
+              // Gracefully handle any network image fetch failure
+            }
+          }
+        }
+      }
+      zip.file("photo_manifest.json", JSON.stringify(photoLinks, null, 2));
 
       // Generate zip file
       const content = await zip.generateAsync({ type: "blob" });

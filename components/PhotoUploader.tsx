@@ -63,7 +63,7 @@ export default function PhotoUploader({
 
       const data = await res.json();
       setPreview(data.url);
-      onUploaded(data.url);
+      onUploaded(data.path || data.url);
     } catch (err: unknown) {
       console.error("Photo upload error:", err);
       setError(err instanceof Error ? err.message : "Failed to upload photo.");

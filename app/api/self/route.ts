@@ -39,6 +39,18 @@ export async function GET() {
     .single();
 
   if (insertErr) {
+    // If unique constraint violation or concurrent insert occurred, attempt to fetch existing
+    const { data: retryProfile } = await supabase
+      .from("clients")
+      .select("*")
+      .eq("coach_user_id", user.id)
+      .eq("is_self", true)
+      .maybeSingle();
+
+    if (retryProfile) {
+      return NextResponse.json({ client: retryProfile });
+    }
+
     return NextResponse.json({ error: insertErr.message }, { status: 500 });
   }
 
