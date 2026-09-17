@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import Image from "next/image";
-import { Camera, Calendar, ArrowRight, Grid, Columns } from "lucide-react";
+import { Camera, ArrowRight, Grid, Columns } from "lucide-react";
 import { CheckIn } from "@/lib/types";
 import { sortCheckInsChronologically } from "@/lib/progressAnalytics";
 
@@ -216,10 +216,12 @@ export default function PhotoCompareView({ checkIns }: PhotoCompareViewProps) {
 
               <div className="relative w-full aspect-[3/4] max-h-[480px] bg-zinc-950 rounded-lg overflow-hidden flex items-center justify-center border border-zinc-800">
                 {getPhotoUrl(beforeCheckIn, angle) ? (
-                  <img
+                  <Image
                     src={getPhotoUrl(beforeCheckIn, angle)!}
                     alt="Before photo"
-                    className="w-full h-full object-contain"
+                    fill
+                    className="object-contain"
+                    unoptimized
                   />
                 ) : (
                   <div className="text-zinc-600 text-xs flex flex-col items-center gap-1">
@@ -247,13 +249,13 @@ export default function PhotoCompareView({ checkIns }: PhotoCompareViewProps) {
               )}
             </div>
 
-            {/* After card */}
-            <div className="bg-zinc-900/90 border border-zinc-800 rounded-xl p-4 flex flex-col items-center">
-              <div className="w-full flex items-center justify-between mb-3 text-xs">
-                <span className="font-bold text-emerald-400 uppercase tracking-wider">
-                  AFTER
+            {/* After Box */}
+            <div className="bg-zinc-950/80 border border-zinc-800/90 rounded-xl p-4 flex flex-col items-center">
+              <div className="w-full flex items-center justify-between mb-3">
+                <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider">
+                  After
                 </span>
-                <span className="text-zinc-400 font-medium">
+                <span className="text-xs text-zinc-400 font-medium">
                   {afterCheckIn
                     ? new Date(afterCheckIn.week_ending).toLocaleDateString("en-GB", {
                         day: "numeric",
@@ -266,10 +268,12 @@ export default function PhotoCompareView({ checkIns }: PhotoCompareViewProps) {
 
               <div className="relative w-full aspect-[3/4] max-h-[480px] bg-zinc-950 rounded-lg overflow-hidden flex items-center justify-center border border-zinc-800">
                 {getPhotoUrl(afterCheckIn, angle) ? (
-                  <img
+                  <Image
                     src={getPhotoUrl(afterCheckIn, angle)!}
                     alt="After photo"
-                    className="w-full h-full object-contain"
+                    fill
+                    className="object-contain"
+                    unoptimized
                   />
                 ) : (
                   <div className="text-zinc-600 text-xs flex flex-col items-center gap-1">
@@ -324,10 +328,12 @@ export default function PhotoCompareView({ checkIns }: PhotoCompareViewProps) {
 
                   <div className="relative w-full aspect-[3/4] bg-zinc-950 rounded-lg overflow-hidden flex items-center justify-center border border-zinc-800">
                     {url ? (
-                      <img
+                      <Image
                         src={url}
                         alt={`${angle} photo`}
-                        className="w-full h-full object-cover"
+                        fill
+                        className="object-cover"
+                        unoptimized
                       />
                     ) : (
                       <div className="text-zinc-600 text-[11px] text-center p-2">

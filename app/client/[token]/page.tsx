@@ -9,6 +9,7 @@ import {
   CheckCircle2,
   Send,
 } from "lucide-react";
+import PhotoUploader from "@/components/PhotoUploader";
 
 interface PortalClient {
   id: string;
@@ -37,6 +38,9 @@ interface PortalCheckIn {
   stress: number | null;
   client_notes: string | null;
   status: string;
+  photo_front_url?: string | null;
+  photo_side_url?: string | null;
+  photo_back_url?: string | null;
 }
 
 interface PortalReview {
@@ -90,7 +94,7 @@ export default function ClientPortalPage() {
 
   const loadData = useCallback(async () => {
     try {
-      setLoading(true);
+      await Promise.resolve();
       setError(null);
       const res = await fetch(`/api/client-portal/${token}`);
       if (!res.ok) {
@@ -115,7 +119,7 @@ export default function ClientPortalPage() {
   }, [token]);
 
   useEffect(() => {
-    loadData();
+    void loadData();
   }, [loadData]);
 
   function validate(): string | null {
@@ -555,27 +559,35 @@ export default function ClientPortalPage() {
               </div>
 
               <div className="border-t border-zinc-800 pt-3">
-                <label className="mb-2 block text-xs font-semibold text-zinc-300">
-                  Progress Photos (Optional image URLs)
-                </label>
+                <div className="mb-2.5">
+                  <label className="block text-xs font-semibold text-zinc-300">
+                    Weekly Progress Photos
+                  </label>
+                  <p className="text-[11px] text-zinc-500">
+                    Upload your Front, Side, and Back photos. Images are uploaded directly to secure storage.
+                  </p>
+                </div>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <FormField
-                    label="Front Photo URL"
-                    value={form.photo_front_url}
-                    onChange={(v) => setForm({ ...form, photo_front_url: v })}
-                    placeholder="https://..."
+                  <PhotoUploader
+                    label="Front Photo"
+                    angle="front"
+                    uploadEndpoint={`/api/client-portal/${token}/upload`}
+                    currentUrl={form.photo_front_url}
+                    onUploaded={(url) => setForm((prev) => ({ ...prev, photo_front_url: url || "" }))}
                   />
-                  <FormField
-                    label="Side Photo URL"
-                    value={form.photo_side_url}
-                    onChange={(v) => setForm({ ...form, photo_side_url: v })}
-                    placeholder="https://..."
+                  <PhotoUploader
+                    label="Side Photo"
+                    angle="side"
+                    uploadEndpoint={`/api/client-portal/${token}/upload`}
+                    currentUrl={form.photo_side_url}
+                    onUploaded={(url) => setForm((prev) => ({ ...prev, photo_side_url: url || "" }))}
                   />
-                  <FormField
-                    label="Back Photo URL"
-                    value={form.photo_back_url}
-                    onChange={(v) => setForm({ ...form, photo_back_url: v })}
-                    placeholder="https://..."
+                  <PhotoUploader
+                    label="Back Photo"
+                    angle="back"
+                    uploadEndpoint={`/api/client-portal/${token}/upload`}
+                    currentUrl={form.photo_back_url}
+                    onUploaded={(url) => setForm((prev) => ({ ...prev, photo_back_url: url || "" }))}
                   />
                 </div>
               </div>
@@ -695,6 +707,39 @@ export default function ClientPortalPage() {
                           <p className="text-sm text-zinc-400">
                             {ci.client_notes}
                           </p>
+                        )}
+                        {(ci.photo_front_url || ci.photo_side_url || ci.photo_back_url) && (
+                          <div className="border-t border-zinc-800/80 pt-3">
+                            <span className="text-xs font-semibold text-zinc-400 block mb-2">
+                              Progress Photos
+                            </span>
+                            <div className="grid grid-cols-3 gap-2">
+                              {ci.photo_front_url && (
+                                <div className="space-y-1">
+                                  <div className="relative aspect-[3/4] rounded-lg overflow-hidden border border-zinc-800 bg-zinc-950">
+                                    <Image src={ci.photo_front_url} alt="Front" fill className="object-cover" unoptimized />
+                                  </div>
+                                  <span className="text-[10px] text-zinc-500 text-center block">Front</span>
+                                </div>
+                              )}
+                              {ci.photo_side_url && (
+                                <div className="space-y-1">
+                                  <div className="relative aspect-[3/4] rounded-lg overflow-hidden border border-zinc-800 bg-zinc-950">
+                                    <Image src={ci.photo_side_url} alt="Side" fill className="object-cover" unoptimized />
+                                  </div>
+                                  <span className="text-[10px] text-zinc-500 text-center block">Side</span>
+                                </div>
+                              )}
+                              {ci.photo_back_url && (
+                                <div className="space-y-1">
+                                  <div className="relative aspect-[3/4] rounded-lg overflow-hidden border border-zinc-800 bg-zinc-950">
+                                    <Image src={ci.photo_back_url} alt="Back" fill className="object-cover" unoptimized />
+                                  </div>
+                                  <span className="text-[10px] text-zinc-500 text-center block">Back</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
                         )}
                         {rev && (
                           <div className="border-t border-zinc-800 pt-3 space-y-2">

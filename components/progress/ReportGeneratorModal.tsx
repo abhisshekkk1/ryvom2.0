@@ -88,10 +88,12 @@ export default function ReportGeneratorModal({
 
   // CSV Export for the filtered check-ins
   const handleExportCSV = () => {
+    const metricHeaders = performanceMetrics.map((m) => `"${m.name} (${m.unit})"`);
     const headers = [
       "Week Ending",
       "Submitted At",
       "Weight (kg)",
+      "Average Weight (kg)",
       "Waist (cm)",
       "Diet Adherence (%)",
       "Training Adherence (%)",
@@ -101,6 +103,7 @@ export default function ReportGeneratorModal({
       "Energy (1-10)",
       "Stress (1-10)",
       "Status",
+      ...metricHeaders,
       "Client Notes",
       "Coach Wins",
       "Coach Adjustments",
@@ -109,10 +112,18 @@ export default function ReportGeneratorModal({
 
     const rows = checkIns.map((c) => {
       const review = reviews[c.id];
+      const metricValues = performanceMetrics.map((m) => {
+        const log = m.logs.find(
+          (l) => l.check_in_id === c.id || l.logged_date === c.week_ending
+        );
+        return log ? log.value : "";
+      });
+
       return [
         `"${c.week_ending}"`,
         `"${c.submitted_at || ""}"`,
         c.weight ?? "",
+        c.average_weight ?? "",
         c.waist_cm ?? "",
         c.diet_adherence ?? "",
         c.training_adherence ?? "",
@@ -122,6 +133,7 @@ export default function ReportGeneratorModal({
         c.energy ?? "",
         c.stress ?? "",
         `"${c.status}"`,
+        ...metricValues,
         `"${(c.client_notes || "").replace(/"/g, '""')}"`,
         `"${(review?.wins || "").replace(/"/g, '""')}"`,
         `"${(review?.adjustments || "").replace(/"/g, '""')}"`,
@@ -340,6 +352,37 @@ export default function ReportGeneratorModal({
         }
       }
 
+      // ─── Coach Notes Section ───
+      if (includeCoachNotes && coachNotes && coachNotes.length > 0) {
+        if (y > 230) {
+          doc.addPage();
+          y = 25;
+        }
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(13);
+        doc.setTextColor(24, 24, 27);
+        doc.text("COACH NOTES & OBSERVATIONS (CONFIDENTIAL)", 16, y);
+        y += 7;
+
+        coachNotes.slice(0, 10).forEach((n) => {
+          if (y > 270) {
+            doc.addPage();
+            y = 20;
+          }
+          doc.setFontSize(9);
+          doc.setFont("helvetica", "bold");
+          doc.setTextColor(24, 24, 27);
+          doc.text(`[${n.note_date}] (${n.category || "General"}):`, 18, y);
+          y += 4.5;
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(8.5);
+          doc.setTextColor(63, 63, 70);
+          const split = doc.splitTextToSize(n.note, 165);
+          doc.text(split, 22, y);
+          y += split.length * 4.5 + 3;
+        });
+      }
+
       // ─── Footer ───
       const pageCount = doc.getNumberOfPages();
       for (let i = 1; i <= pageCount; i++) {
@@ -523,6 +566,15 @@ export default function ReportGeneratorModal({
               className="rounded border-zinc-700 text-amber-400 focus:ring-0"
             />
             Include coach reviews & adjustments
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={includeCoachNotes}
+              onChange={(e) => setIncludeCoachNotes(e.target.checked)}
+              className="rounded border-zinc-700 text-amber-400 focus:ring-0"
+            />
+            Include confidential coach notes
           </label>
         </div>
 

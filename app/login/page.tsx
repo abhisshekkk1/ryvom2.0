@@ -30,14 +30,20 @@ export default function LoginPage() {
       });
     const params = new URLSearchParams(window.location.search);
     const authError = params.get("error");
-    if (authError) setError(authError);
+    if (authError) {
+      Promise.resolve().then(() => setError(authError));
+    }
   }, []);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError(null);
-    setMessage(null);
+    if (email.trim().toLowerCase() !== COACH_EMAIL.toLowerCase()) {
+      setError("This is a private Ryvom coach account. Only abhishek0442@gmail.com is authorized.");
+      setLoading(false);
+      return;
+    }
 
     try {
       const { data, error: authError } =

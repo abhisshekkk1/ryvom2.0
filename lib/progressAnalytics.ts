@@ -1,4 +1,4 @@
-import { CheckIn, MetricSummary, PeriodComparisonData, PerformanceLog, PerformanceWithLogs, ClientWithCheckIn } from "./types";
+import { CheckIn, MetricSummary, PeriodComparisonData, PerformanceWithLogs, ClientWithCheckIn } from "./types";
 
 /**
  * Format number safely, returning "-" if null/undefined/NaN/Infinite.

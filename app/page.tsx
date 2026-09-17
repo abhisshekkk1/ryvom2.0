@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
   CheckCircle2,
-  ChevronRight,
   ClipboardList,
   Clock3,
   Plus,
@@ -12,9 +11,6 @@ import {
   Users,
   AlertTriangle,
   TrendingUp,
-  Activity,
-  ArrowRight,
-  Sparkles,
 } from "lucide-react";
 import Sidebar from "@/components/Sidebar";
 import Modal from "@/components/Modal";
@@ -26,7 +22,7 @@ import {
   formatNum,
   formatDiff,
 } from "@/lib/progressAnalytics";
-import type { Client, CheckIn, ClientWithCheckIn } from "@/lib/types";
+import type { Client, CheckIn } from "@/lib/types";
 
 function Stat({
   label,
@@ -90,7 +86,7 @@ export default function Home() {
 
   const loadData = useCallback(async () => {
     try {
-      setLoading(true);
+      await Promise.resolve();
       setError(null);
       const res = await fetch("/api/clients");
       if (!res.ok) throw new Error("Failed to load clients");
@@ -105,7 +101,7 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    loadData();
+    void loadData();
   }, [loadData]);
 
   // Group check-ins per client
@@ -380,7 +376,7 @@ export default function Home() {
 
                 {clients.length === 0 ? (
                   <EmptyState
-                    title="No clients added yet"
+                    title="No clients yet"
                     description="Create your first client profile to begin tracking progress."
                     action={
                       <button
@@ -388,7 +384,7 @@ export default function Home() {
                         className="flex items-center gap-2 rounded-xl bg-amber-400 px-4 py-2.5 text-xs font-bold text-zinc-950 hover:bg-amber-300 transition-colors cursor-pointer"
                       >
                         <Plus size={16} />
-                        Add First Client
+                        Add Client
                       </button>
                     }
                   />
@@ -564,7 +560,7 @@ export default function Home() {
               <input
                 type="text"
                 required
-                placeholder="e.g. Rahul Sharma"
+                placeholder="Client full name"
                 value={addForm.full_name}
                 onChange={(e) => setAddForm((p) => ({ ...p, full_name: e.target.value }))}
                 className="w-full bg-zinc-950 border border-zinc-700 rounded-lg p-2.5 text-xs text-white focus:outline-none focus:border-amber-400"

@@ -1,13 +1,13 @@
 "use client";
 
 import React, { useState } from "react";
-import { Dumbbell, Plus, TrendingUp, Trophy, Calendar, Trash2 } from "lucide-react";
+import { Dumbbell, Plus, Trophy, Trash2 } from "lucide-react";
 import { PerformanceWithLogs, MetricType } from "@/lib/types";
 import { formatNum, formatDiff } from "@/lib/progressAnalytics";
 import InteractiveChart from "./InteractiveChart";
 
 interface PerformanceTrackerProps {
-  clientId: string;
+  clientId?: string;
   metrics: PerformanceWithLogs[];
   onAddMetric: (metric: {
     name: string;
@@ -26,7 +26,6 @@ interface PerformanceTrackerProps {
 }
 
 export default function PerformanceTracker({
-  clientId,
   metrics,
   onAddMetric,
   onLogPerformance,

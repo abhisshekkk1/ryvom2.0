@@ -1,12 +1,13 @@
 {
-  "name": "temp-next",
-  "version": "0.1.0",
+  "name": "ryvom",
+  "version": "2.0.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint app components lib"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",

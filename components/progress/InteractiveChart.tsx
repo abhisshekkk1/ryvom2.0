@@ -159,7 +159,7 @@ export default function InteractiveChart({
                 color: "#fafafa",
               }}
               labelStyle={{ color: "#a1a1aa", marginBottom: "4px" }}
-              formatter={(value: any) => [
+              formatter={(value: unknown) => [
                 `${formatNum(Number(value), 1, "", ` ${unit}`)}`,
                 title,
               ]}
@@ -183,6 +183,7 @@ export default function InteractiveChart({
               name={title}
               stroke={color}
               strokeWidth={2.5}
+              connectNulls={false}
               dot={{ fill: color, r: 4, strokeWidth: 1, stroke: "#18181b" }}
               activeDot={{ r: 6, fill: color, stroke: "#fff", strokeWidth: 2 }}
             />
@@ -194,6 +195,7 @@ export default function InteractiveChart({
                 stroke={avgColor}
                 strokeWidth={1.5}
                 strokeDasharray="4 4"
+                connectNulls={false}
                 dot={false}
               />
             )}

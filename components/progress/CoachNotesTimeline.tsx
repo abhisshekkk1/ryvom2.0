@@ -1,18 +1,17 @@
 "use client";
 
 import React, { useState } from "react";
-import { Lock, Plus, FileText, Calendar, Trash2, Tag } from "lucide-react";
+import { Lock, Plus, FileText, Trash2 } from "lucide-react";
 import { CoachTimelineNote } from "@/lib/types";
 
 interface CoachNotesTimelineProps {
-  clientId: string;
+  clientId?: string;
   notes: CoachTimelineNote[];
   onAddNote: (note: { note_date: string; note: string; category?: string }) => Promise<void>;
   onDeleteNote?: (noteId: string) => Promise<void>;
 }
 
 export default function CoachNotesTimeline({
-  clientId,
   notes,
   onAddNote,
   onDeleteNote,

@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { ArrowRight, ArrowUpRight, ArrowDownRight, Minus, GitCompare } from "lucide-react";
-import { CheckIn, DateRangePreset } from "@/lib/types";
+import { CheckIn } from "@/lib/types";
 import { computePeriodComparison, formatNum, formatDiff } from "@/lib/progressAnalytics";
 
 interface PeriodComparisonViewProps {
@@ -69,48 +69,54 @@ export default function PeriodComparisonView({ checkIns }: PeriodComparisonViewP
                 <div>
                   <div className="flex items-center justify-between text-sm font-semibold">
                     <span className="text-zinc-400 font-normal">
-                      {formatNum(m.previousValue, 1)}
+                      {m.previousValue !== null ? formatNum(m.previousValue, 1) : "—"}
                     </span>
                     <ArrowRight className="w-3.5 h-3.5 text-zinc-600" />
                     <span className="text-white font-bold">
-                      {formatNum(m.currentValue, 1)}
+                      {m.currentValue !== null ? formatNum(m.currentValue, 1) : "—"}
                     </span>
                   </div>
 
                   <div className="mt-2 pt-2 border-t border-zinc-900 flex items-center justify-between text-xs">
                     <span className="text-zinc-500">Difference:</span>
                     <div className="flex items-center gap-1">
-                      {m.difference !== null && m.difference > 0 && (
-                        <ArrowUpRight className="w-3 h-3 text-amber-400" />
-                      )}
-                      {m.difference !== null && m.difference < 0 && (
-                        <ArrowDownRight className="w-3 h-3 text-emerald-400" />
-                      )}
-                      {m.difference === 0 && <Minus className="w-3 h-3 text-zinc-500" />}
-                      <span
-                        className={`font-semibold ${
-                          isBetter === true
-                            ? "text-emerald-400"
-                            : isBetter === false
-                            ? "text-rose-400"
-                            : m.difference !== null && m.difference !== 0
-                            ? "text-amber-400"
-                            : "text-zinc-400"
-                        }`}
-                      >
-                        {formatDiff(m.difference, 1)} {m.unit}
-                        {m.percentageDifference !== null && (
-                          <span className="text-[10px] text-zinc-500 ml-1">
-                            ({formatDiff(m.percentageDifference, 1, "%")})
+                      {m.difference !== null ? (
+                        <>
+                          {m.difference > 0 && (
+                            <ArrowUpRight className="w-3 h-3 text-amber-400" />
+                          )}
+                          {m.difference < 0 && (
+                            <ArrowDownRight className="w-3 h-3 text-emerald-400" />
+                          )}
+                          {m.difference === 0 && <Minus className="w-3 h-3 text-zinc-500" />}
+                          <span
+                            className={`font-semibold ${
+                              isBetter === true
+                                ? "text-emerald-400"
+                                : isBetter === false
+                                ? "text-rose-400"
+                                : m.difference !== 0
+                                ? "text-amber-400"
+                                : "text-zinc-400"
+                            }`}
+                          >
+                            {formatDiff(m.difference, 1)} {m.unit}
+                            {m.percentageDifference !== null && (
+                              <span className="text-[10px] text-zinc-500 ml-1">
+                                ({formatDiff(m.percentageDifference, 1, "%")})
+                              </span>
+                            )}
                           </span>
-                        )}
-                      </span>
+                        </>
+                      ) : (
+                        <span className="text-zinc-500 italic text-[11px]">Insufficient data</span>
+                      )}
                     </div>
                   </div>
                 </div>
               ) : (
                 <div className="text-xs text-zinc-600 italic py-2">
-                  Not enough data for this period
+                  Insufficient data
                 </div>
               )}
             </div>

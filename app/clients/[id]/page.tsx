@@ -13,7 +13,6 @@ import {
   RotateCcw,
   Link2,
   TrendingUp,
-  Trash2,
   Calendar,
   Camera,
   Dumbbell,
@@ -21,8 +20,10 @@ import {
   Activity,
   Plus,
   Lock,
-  ExternalLink,
+  AlertCircle,
+  CheckCircle2,
 } from "lucide-react";
+import PhotoUploader from "@/components/PhotoUploader";
 import Sidebar from "@/components/Sidebar";
 import Modal from "@/components/Modal";
 import StatusBadge from "@/components/StatusBadge";
@@ -40,14 +41,12 @@ import {
   filterCheckInsByRange,
   sortCheckInsChronologically,
   formatNum,
-  formatDiff,
   computePerformancePRs,
 } from "@/lib/progressAnalytics";
 import type {
   Client,
   CheckIn,
   CoachReview,
-  CheckInStatus,
   PerformanceWithLogs,
   CoachTimelineNote,
   DateRangePreset,
@@ -93,7 +92,6 @@ export default function ClientProfilePage() {
 
   // Check-in & Review state
   const [expandedCheckin, setExpandedCheckin] = useState<string | null>(null);
-  const [activeReviewId, setActiveReviewId] = useState<string | null>(null);
   const [reviewForm, setReviewForm] = useState({
     wins: "",
     issues: "",
@@ -102,9 +100,18 @@ export default function ClientProfilePage() {
     coach_notes: "",
   });
   const [reviewLoading, setReviewLoading] = useState(false);
-  const [reviewSuccess, setReviewSuccess] = useState(false);
-  const [statusLoading, setStatusLoading] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [actionFeedback, setActionFeedback] = useState<{
+    message: string;
+    type: "error" | "success";
+  } | null>(null);
+
+  const notify = (message: string, type: "error" | "success" = "error") => {
+    setActionFeedback({ message, type });
+    setTimeout(() => {
+      setActionFeedback((prev) => (prev?.message === message ? null : prev));
+    }, 4000);
+  };
 
   // Manual Check-in Form state
   const [manualCheckin, setManualCheckin] = useState({
@@ -128,7 +135,7 @@ export default function ClientProfilePage() {
 
   const loadData = useCallback(async () => {
     try {
-      setLoading(true);
+      await Promise.resolve();
       setError(null);
 
       // Fetch client & check-ins
@@ -159,7 +166,7 @@ export default function ClientProfilePage() {
   }, [id]);
 
   useEffect(() => {
-    loadData();
+    void loadData();
   }, [loadData]);
 
   // Performance Metric Handlers
@@ -265,9 +272,10 @@ export default function ClientProfilePage() {
         throw new Error(j.error || "Failed to save check-in");
       }
       setShowManualCheckinModal(false);
+      notify("Check-in submitted successfully!", "success");
       await loadData();
-    } catch (err: any) {
-      alert(err.message || "Failed to submit check-in");
+    } catch (err: unknown) {
+      notify(err instanceof Error ? err.message : "Failed to submit check-in", "error");
     } finally {
       setManualSubmitting(false);
     }
@@ -301,6 +309,7 @@ export default function ClientProfilePage() {
         throw new Error(json.error || "Failed to update client");
       }
       setShowEditModal(false);
+      notify("Client profile updated successfully", "success");
       await loadData();
     } catch (err) {
       setEditError(err instanceof Error ? err.message : "Failed to update client");
@@ -322,8 +331,9 @@ export default function ClientProfilePage() {
       const json = await res.json();
       setInviteUrl(json.url);
       setData((prev) => (prev ? { ...prev, hasActiveLink: true } : prev));
+      notify("New invite link generated", "success");
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to generate invite");
+      notify(err instanceof Error ? err.message : "Failed to generate invite", "error");
     } finally {
       setInviteLoading(false);
     }
@@ -333,14 +343,16 @@ export default function ClientProfilePage() {
   async function handleToggleArchive() {
     if (!data) return;
     try {
+      const newStatus = !data.client.active;
       await fetch(`/api/clients/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ active: !data.client.active }),
+        body: JSON.stringify({ active: newStatus }),
       });
+      notify(newStatus ? "Client restored to active list" : "Client archived", "success");
       await loadData();
     } catch {
-      alert("Failed to update status");
+      notify("Failed to update client status", "error");
     }
   }
 
@@ -351,14 +363,13 @@ export default function ClientProfilePage() {
       if (!res.ok) throw new Error("Failed to delete client");
       router.push("/");
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to delete client");
+      notify(err instanceof Error ? err.message : "Failed to delete client", "error");
     }
   }
 
   // Save Coach Review
   async function handleSaveReview(checkinId: string) {
     setReviewLoading(true);
-    setReviewSuccess(false);
     try {
       const res = await fetch(`/api/clients/${id}/review`, {
         method: "POST",
@@ -366,11 +377,10 @@ export default function ClientProfilePage() {
         body: JSON.stringify({ check_in_id: checkinId, ...reviewForm }),
       });
       if (!res.ok) throw new Error("Failed to save review");
-      setReviewSuccess(true);
+      notify("Check-in review saved successfully!", "success");
       await loadData();
-      setTimeout(() => setReviewSuccess(false), 3000);
     } catch {
-      alert("Failed to save review");
+      notify("Failed to save review", "error");
     } finally {
       setReviewLoading(false);
     }
@@ -418,6 +428,31 @@ export default function ClientProfilePage() {
       <Sidebar />
 
       <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full space-y-6">
+        {actionFeedback && (
+          <div
+            className={`flex items-center justify-between gap-2.5 p-3.5 rounded-xl border text-xs font-semibold shadow-lg transition-all animate-in fade-in slide-in-from-top-2 ${
+              actionFeedback.type === "success"
+                ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
+                : "bg-rose-500/10 border-rose-500/30 text-rose-300"
+            }`}
+          >
+            <div className="flex items-center gap-2.5">
+              {actionFeedback.type === "success" ? (
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+              ) : (
+                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+              )}
+              <span>{actionFeedback.message}</span>
+            </div>
+            <button
+              onClick={() => setActionFeedback(null)}
+              className="text-zinc-500 hover:text-white text-xs cursor-pointer"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
         {/* Top Header & Quick Actions */}
         <div className="flex flex-wrap items-center justify-between gap-4 border-b border-zinc-800 pb-5">
           <div className="flex items-center gap-3">
@@ -538,20 +573,20 @@ export default function ClientProfilePage() {
 
         {/* ─── 6 PRIMARY TABS NAVIGATION ─── */}
         <div className="flex border-b border-zinc-800 overflow-x-auto scrollbar-none gap-2">
-          {[
-            { id: "progress", label: "Progress", icon: TrendingUp },
-            { id: "performance", label: "Performance", icon: Dumbbell },
-            { id: "photos", label: "Photos", icon: Camera },
+          {([
+            { id: "progress", label: "Progress", icon: TrendingUp, badge: 0 },
+            { id: "performance", label: "Performance", icon: Dumbbell, badge: 0 },
+            { id: "photos", label: "Photos", icon: Camera, badge: 0 },
             { id: "checkins", label: "Check-ins", icon: Activity, badge: checkins.filter(c => c.status === "pending").length },
-            { id: "coach_notes", label: "Coach Notes", icon: Lock },
-            { id: "overview", label: "Overview", icon: Calendar },
-          ].map((tab) => {
+            { id: "coach_notes", label: "Coach Notes", icon: Lock, badge: 0 },
+            { id: "overview", label: "Overview", icon: Calendar, badge: 0 },
+          ] as const).map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
             return (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id as any)}
+                onClick={() => setActiveTab(tab.id)}
                 className={`pb-3 px-3.5 text-xs font-semibold flex items-center gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap ${
                   isActive
                     ? "border-amber-400 text-amber-400"
@@ -1405,6 +1440,42 @@ export default function ClientProfilePage() {
                 }
                 className="w-full bg-zinc-950 border border-zinc-700 rounded-lg p-2 text-xs text-white"
               />
+            </div>
+
+            {/* Progress Photos Upload */}
+            <div className="border-t border-zinc-800 pt-3">
+              <label className="block text-xs font-semibold text-zinc-300 mb-2">
+                Progress Photos (Optional)
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                <PhotoUploader
+                  label="Front Photo"
+                  angle="front"
+                  uploadEndpoint={`/api/clients/${id}/upload`}
+                  currentUrl={manualCheckin.photo_front_url}
+                  onUploaded={(url) =>
+                    setManualCheckin((p) => ({ ...p, photo_front_url: url || "" }))
+                  }
+                />
+                <PhotoUploader
+                  label="Side Photo"
+                  angle="side"
+                  uploadEndpoint={`/api/clients/${id}/upload`}
+                  currentUrl={manualCheckin.photo_side_url}
+                  onUploaded={(url) =>
+                    setManualCheckin((p) => ({ ...p, photo_side_url: url || "" }))
+                  }
+                />
+                <PhotoUploader
+                  label="Back Photo"
+                  angle="back"
+                  uploadEndpoint={`/api/clients/${id}/upload`}
+                  currentUrl={manualCheckin.photo_back_url}
+                  onUploaded={(url) =>
+                    setManualCheckin((p) => ({ ...p, photo_back_url: url || "" }))
+                  }
+                />
+              </div>
             </div>
 
             <div className="flex justify-end gap-2 pt-3 border-t border-zinc-800">

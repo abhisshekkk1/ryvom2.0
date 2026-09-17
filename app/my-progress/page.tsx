@@ -22,8 +22,8 @@ export default function MyProgressPage() {
         } else {
           throw new Error("No client ID returned");
         }
-      } catch (err: any) {
-        setError(err.message || "Failed to load personal profile");
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : "Failed to load personal profile");
       }
     }
 

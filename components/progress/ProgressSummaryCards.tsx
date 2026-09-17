@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Scale, Target, Ruler, Activity, CheckCircle, Clock, Zap, Dumbbell } from "lucide-react";
+import { Scale, Activity, CheckCircle, Clock, Dumbbell } from "lucide-react";
 import { formatNum, formatDiff } from "@/lib/progressAnalytics";
 import { PerformanceWithLogs } from "@/lib/types";
 

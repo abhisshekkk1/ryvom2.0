@@ -31,9 +31,11 @@ export async function getCoachAuth() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) {
+  if (!user || user.email?.toLowerCase() !== COACH_EMAIL.toLowerCase()) {
     return { supabase: null, user: null };
   }
 
   return { supabase, user };
 }
+
+export { COACH_EMAIL };

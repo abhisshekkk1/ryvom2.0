@@ -22,7 +22,7 @@ export async function GET(_request: Request, context: { params: Promise<{ token:
     if (!result) return NextResponse.json({ error: "This client link is invalid or expired." }, { status: 404 });
     const { db, clientId } = result;
     const { data: client } = await db.from("clients").select("id,full_name,email,goal,starting_weight,target_weight,target_date,notes").eq("id", clientId).single();
-    const { data: checkins } = await db.from("check_ins").select("id,week_ending,submitted_at,weight,average_weight,waist_cm,diet_adherence,training_adherence,average_steps,sleep_hours,hunger,energy,stress,client_notes,status").eq("client_id", clientId).order("week_ending", { ascending: false });
+    const { data: checkins } = await db.from("check_ins").select("id,week_ending,submitted_at,weight,average_weight,waist_cm,diet_adherence,training_adherence,average_steps,sleep_hours,hunger,energy,stress,client_notes,status,photo_front_url,photo_side_url,photo_back_url").eq("client_id", clientId).order("week_ending", { ascending: false });
     const ids = (checkins || []).map(x => x.id);
     const { data: reviews } = ids.length ? await db.from("coach_reviews").select("check_in_id,wins,issues,adjustments,next_week_goals,reviewed_at").in("check_in_id", ids) : { data: [] };
     return NextResponse.json({ client, checkins: checkins || [], reviews: reviews || [] });

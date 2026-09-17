@@ -1,25 +1,5 @@
 import { NextResponse } from "next/server";
-import { createServerClient } from "@supabase/ssr";
-import { cookies } from "next/headers";
-
-const COACH_EMAIL = "abhishek0442@gmail.com";
-
-async function getCoachSupabase() {
-  const cookieStore = await cookies();
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: { getAll: () => cookieStore.getAll(), setAll: () => {} },
-    }
-  );
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user)
-    return { supabase: null, user: null };
-  return { supabase, user };
-}
+import { getCoachAuth } from "@/lib/supabase/server";
 
 // GET /api/clients/[id] — get a single client with all check-ins and reviews
 export async function GET(
@@ -27,7 +7,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const { supabase, user } = await getCoachSupabase();
+  const { supabase, user } = await getCoachAuth();
   if (!supabase || !user)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -79,7 +59,7 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const { supabase, user } = await getCoachSupabase();
+  const { supabase, user } = await getCoachAuth();
   if (!supabase || !user)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -120,7 +100,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const { supabase, user } = await getCoachSupabase();
+  const { supabase, user } = await getCoachAuth();
   if (!supabase || !user)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 

@@ -1,17 +1,10 @@
 import { NextResponse } from "next/server";
 import { randomBytes, createHash } from "crypto";
-import { createServerClient } from "@supabase/ssr";
-import { cookies } from "next/headers";
-
-const COACH_EMAIL = "abhishek0442@gmail.com";
+import { getCoachAuth } from "@/lib/supabase/server";
 
 export async function POST(request: Request) {
-  const cookieStore = await cookies();
-  const supabase = createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
-    cookies: { getAll: () => cookieStore.getAll(), setAll: () => {} },
-  });
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { supabase, user } = await getCoachAuth();
+  if (!supabase || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const body = await request.json();
   if (!body.client_id) return NextResponse.json({ error: "client_id is required" }, { status: 400 });
   const { data: client } = await supabase.from("clients").select("id").eq("id", body.client_id).eq("coach_user_id", user.id).single();

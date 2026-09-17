@@ -59,10 +59,10 @@ export async function middleware(request: NextRequest) {
       data: { user },
     } = await Promise.race([getUserPromise, timeoutPromise]);
 
-    if (!user) {
-      // No session — sign out and redirect
+    if (!user || user.email?.toLowerCase() !== COACH_EMAIL.toLowerCase()) {
+      // No session or unauthorized coach — sign out and redirect
       await supabase.auth.signOut().catch(() => {});
-      return NextResponse.redirect(new URL("/login", request.url));
+      return NextResponse.redirect(new URL("/login?error=" + encodeURIComponent("Only authorized coach account allowed."), request.url));
     }
   } catch {
     console.warn("Auth check timed out or failed in middleware");
