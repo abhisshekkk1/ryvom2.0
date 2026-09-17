@@ -28,6 +28,9 @@ export async function middleware(request: NextRequest) {
   );
 
   if (!hasAuthCookie) {
+    if (pathname.startsWith("/api/")) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
@@ -62,10 +65,19 @@ export async function middleware(request: NextRequest) {
     if (!user || user.email?.toLowerCase() !== COACH_EMAIL.toLowerCase()) {
       // No session or unauthorized coach — sign out and redirect
       await supabase.auth.signOut().catch(() => {});
+      if (pathname.startsWith("/api/")) {
+        return NextResponse.json(
+          { error: "Unauthorized coach access" },
+          { status: 401 }
+        );
+      }
       return NextResponse.redirect(new URL("/login?error=" + encodeURIComponent("Only authorized coach account allowed."), request.url));
     }
   } catch {
     console.warn("Auth check timed out or failed in middleware");
+    if (pathname.startsWith("/api/")) {
+      return NextResponse.json({ error: "Authentication timeout" }, { status: 401 });
+    }
     return NextResponse.redirect(new URL("/login", request.url));
   }
 

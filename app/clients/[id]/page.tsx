@@ -28,7 +28,7 @@ import PhotoUploader from "@/components/PhotoUploader";
 import Sidebar from "@/components/Sidebar";
 import Modal from "@/components/Modal";
 import StatusBadge from "@/components/StatusBadge";
-import { LoadingState, ErrorState } from "@/components/EmptyState";
+import { LoadingState } from "@/components/EmptyState";
 import DateRangeSelector from "@/components/progress/DateRangeSelector";
 import ProgressSummaryCards from "@/components/progress/ProgressSummaryCards";
 import InteractiveChart from "@/components/progress/InteractiveChart";
@@ -61,7 +61,13 @@ interface ClientData {
   hasActiveLink: boolean;
 }
 
-export default function ClientProfilePage() {
+interface ClientProfilePageProps {
+  initialTab?: "overview" | "checkins" | "progress" | "performance" | "photos" | "coach_notes";
+}
+
+export default function ClientProfilePage({
+  initialTab = "progress",
+}: ClientProfilePageProps) {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const [data, setData] = useState<ClientData | null>(null);
@@ -73,7 +79,16 @@ export default function ClientProfilePage() {
   // 6 Primary Tabs
   const [activeTab, setActiveTab] = useState<
     "overview" | "checkins" | "progress" | "performance" | "photos" | "coach_notes"
-  >("progress");
+  >(() => {
+    if (typeof window !== "undefined") {
+      const sp = new URLSearchParams(window.location.search).get("tab");
+      const valid = ["overview", "checkins", "progress", "performance", "photos", "coach_notes"];
+      if (sp && valid.includes(sp)) {
+        return sp as "overview" | "checkins" | "progress" | "performance" | "photos" | "coach_notes";
+      }
+    }
+    return initialTab;
+  });
 
   // Date range filtering
   const [dateRangePreset, setDateRangePreset] = useState<DateRangePreset>("8w");
@@ -135,13 +150,33 @@ export default function ClientProfilePage() {
   const [manualSubmitting, setManualSubmitting] = useState(false);
 
   const loadData = useCallback(async () => {
+    if (!id || id === "undefined") {
+      return;
+    }
+
     try {
-      await Promise.resolve();
+      setLoading(true);
       setError(null);
 
       // Fetch client & check-ins
       const res = await fetch(`/api/clients/${id}`);
-      if (!res.ok) throw new Error("Client not found");
+      if (!res.ok) {
+        if (res.status === 401) {
+          router.push("/login");
+          return;
+        }
+        const errJson = await res.json().catch(() => ({}));
+        const errorMsg =
+          errJson.error ||
+          (res.status === 404
+            ? "Client not found or does not belong to your account."
+            : res.status === 403
+            ? "Access denied. You do not have permission to view this client."
+            : res.status === 400
+            ? "Invalid client ID."
+            : `Server error (${res.status}) while loading client.`);
+        throw new Error(errorMsg);
+      }
       const json = await res.json();
       setData(json);
 
@@ -164,11 +199,13 @@ export default function ClientProfilePage() {
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, router]);
 
   useEffect(() => {
-    void loadData();
-  }, [loadData]);
+    if (id && id !== "undefined") {
+      void loadData();
+    }
+  }, [id, loadData]);
 
   // Performance Metric Handlers
   const handleAddMetric = async (metricData: {
@@ -396,13 +433,49 @@ export default function ClientProfilePage() {
     }
   }
 
-  if (loading) return <LoadingState />;
+  if (!id || id === "undefined" || loading) {
+    return (
+      <div className="flex min-h-screen bg-zinc-950 text-white">
+        <Sidebar />
+        <main className="flex-1 p-8 flex items-center justify-center">
+          <LoadingState message="Loading client profile..." />
+        </main>
+      </div>
+    );
+  }
+
   if (error || !data) {
     return (
-      <ErrorState
-        message={error || "Could not load client profile."}
-        onRetry={() => { loadData(); }}
-      />
+      <div className="flex min-h-screen bg-zinc-950 text-white">
+        <Sidebar />
+        <main className="flex-1 p-8 flex items-center justify-center">
+          <div className="flex flex-col items-center justify-center py-16 px-4 text-center max-w-md">
+            <div className="mb-4 text-red-400">
+              <AlertCircle size={48} strokeWidth={1.5} />
+            </div>
+            <h3 className="text-lg font-semibold text-zinc-200 mb-2">
+              {error || "Could not load client profile"}
+            </h3>
+            <p className="text-xs text-zinc-500 mb-6">
+              Please verify the client ID, network connection, or your account permissions.
+            </p>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => { void loadData(); }}
+                className="rounded-xl bg-zinc-800 px-4 py-2 text-sm font-medium text-zinc-300 hover:bg-zinc-700 transition-colors cursor-pointer"
+              >
+                Try again
+              </button>
+              <button
+                onClick={() => router.push("/")}
+                className="rounded-xl bg-amber-400 px-4 py-2 text-sm font-bold text-zinc-950 hover:bg-amber-300 transition-colors cursor-pointer"
+              >
+                Back to Dashboard
+              </button>
+            </div>
+          </div>
+        </main>
+      </div>
     );
   }
 

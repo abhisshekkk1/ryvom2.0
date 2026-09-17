@@ -40,12 +40,25 @@ export async function GET(
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const adminDb = createAdminSupabase();
-  const checkins = await attachSignedPhotoUrlsToCheckins(
-    adminDb,
-    rawCheckins || [],
-    id
-  );
+  let storageClient = supabase;
+  if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    try {
+      storageClient = createAdminSupabase();
+    } catch {
+      // Fall back to coach authenticated supabase client
+    }
+  }
+
+  let checkins = rawCheckins || [];
+  try {
+    checkins = await attachSignedPhotoUrlsToCheckins(
+      storageClient,
+      rawCheckins || [],
+      id
+    );
+  } catch (photoErr) {
+    console.warn("Checkins photo signing fallback:", photoErr);
+  }
 
   return NextResponse.json({ checkins: checkins || [] });
 }

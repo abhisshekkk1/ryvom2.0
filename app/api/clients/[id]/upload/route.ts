@@ -62,16 +62,27 @@ export async function POST(
       );
     }
 
-    const adminDb = createAdminSupabase();
+    let storageClient = supabase;
+    if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      try {
+        storageClient = createAdminSupabase();
+      } catch {
+        // Fall back to coach authenticated supabase client
+      }
+    }
 
     // Ensure private bucket exists
-    const { data: buckets } = await adminDb.storage.listBuckets();
-    const bucketExists = buckets?.some((b) => b.id === "client-photos");
-    if (!bucketExists) {
-      await adminDb.storage.createBucket("client-photos", {
-        public: false, // Strictly private bucket
-        fileSizeLimit: MAX_FILE_SIZE,
-      });
+    try {
+      const { data: buckets } = await storageClient.storage.listBuckets();
+      const bucketExists = buckets?.some((b) => b.id === "client-photos");
+      if (!bucketExists && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+        await storageClient.storage.createBucket("client-photos", {
+          public: false, // Strictly private bucket
+          fileSizeLimit: MAX_FILE_SIZE,
+        });
+      }
+    } catch {
+      // Bucket creation check can be skipped if listBuckets is not allowed for non-admin
     }
 
     const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
@@ -80,7 +91,7 @@ export async function POST(
 
     const buffer = Buffer.from(await file.arrayBuffer());
 
-    const { error: uploadError } = await adminDb.storage
+    const { error: uploadError } = await storageClient.storage
       .from("client-photos")
       .upload(filePath, buffer, {
         contentType: file.type,
@@ -96,7 +107,7 @@ export async function POST(
     }
 
     // Generate a temporary signed URL for immediate secure preview (valid 2 hours)
-    const { data: signedData, error: signErr } = await adminDb.storage
+    const { data: signedData, error: signErr } = await storageClient.storage
       .from("client-photos")
       .createSignedUrl(filePath, 7200);
 

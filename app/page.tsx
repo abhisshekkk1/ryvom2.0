@@ -521,7 +521,15 @@ export default function Home() {
                                   })
                                 : "No submissions"}
                             </span>
-                            <span className="text-amber-400 font-semibold group-hover:translate-x-0.5 transition-transform flex items-center gap-0.5">
+                            <span
+                              role="button"
+                              tabIndex={0}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                router.push(`/clients/${client.id}`);
+                              }}
+                              className="text-amber-400 font-semibold group-hover:translate-x-0.5 transition-transform flex items-center gap-0.5 cursor-pointer"
+                            >
                               View Progress &rarr;
                             </span>
                           </div>
