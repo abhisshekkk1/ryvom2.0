@@ -435,46 +435,50 @@ export default function ClientProfilePage({
 
   if (!id || id === "undefined" || loading) {
     return (
-      <div className="flex min-h-screen bg-zinc-950 text-white">
+      <div className="min-h-screen bg-[#09090b] text-white">
         <Sidebar />
-        <main className="flex-1 p-8 flex items-center justify-center">
-          <LoadingState message="Loading client profile..." />
-        </main>
+        <div className="lg:pl-64 flex flex-col min-h-screen">
+          <main className="flex-1 p-8 flex items-center justify-center">
+            <LoadingState message="Loading client profile..." />
+          </main>
+        </div>
       </div>
     );
   }
 
   if (error || !data) {
     return (
-      <div className="flex min-h-screen bg-zinc-950 text-white">
+      <div className="min-h-screen bg-[#09090b] text-white">
         <Sidebar />
-        <main className="flex-1 p-8 flex items-center justify-center">
-          <div className="flex flex-col items-center justify-center py-16 px-4 text-center max-w-md">
-            <div className="mb-4 text-red-400">
-              <AlertCircle size={48} strokeWidth={1.5} />
+        <div className="lg:pl-64 flex flex-col min-h-screen">
+          <main className="flex-1 p-8 flex items-center justify-center">
+            <div className="flex flex-col items-center justify-center py-16 px-4 text-center max-w-md">
+              <div className="mb-4 text-red-400">
+                <AlertCircle size={48} strokeWidth={1.5} />
+              </div>
+              <h3 className="text-lg font-semibold text-zinc-200 mb-2">
+                {error || "Could not load client profile"}
+              </h3>
+              <p className="text-xs text-zinc-400 mb-6">
+                Please verify the client ID, network connection, or your account permissions.
+              </p>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => { void loadData(); }}
+                  className="rounded-xl bg-zinc-800 px-4 py-2 text-sm font-medium text-zinc-300 hover:bg-zinc-700 transition-colors cursor-pointer"
+                >
+                  Try again
+                </button>
+                <button
+                  onClick={() => router.push("/")}
+                  className="rounded-xl bg-amber-400 px-4 py-2 text-sm font-bold text-zinc-950 hover:bg-amber-300 transition-colors cursor-pointer"
+                >
+                  Back to Dashboard
+                </button>
+              </div>
             </div>
-            <h3 className="text-lg font-semibold text-zinc-200 mb-2">
-              {error || "Could not load client profile"}
-            </h3>
-            <p className="text-xs text-zinc-500 mb-6">
-              Please verify the client ID, network connection, or your account permissions.
-            </p>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => { void loadData(); }}
-                className="rounded-xl bg-zinc-800 px-4 py-2 text-sm font-medium text-zinc-300 hover:bg-zinc-700 transition-colors cursor-pointer"
-              >
-                Try again
-              </button>
-              <button
-                onClick={() => router.push("/")}
-                className="rounded-xl bg-amber-400 px-4 py-2 text-sm font-bold text-zinc-950 hover:bg-amber-300 transition-colors cursor-pointer"
-              >
-                Back to Dashboard
-              </button>
-            </div>
-          </div>
-        </main>
+          </main>
+        </div>
       </div>
     );
   }
@@ -506,359 +510,376 @@ export default function ClientProfilePage({
   const startingWeight = client.starting_weight ?? weightSummary.first;
   const currentWeight = weightSummary.latest ?? startingWeight;
 
+  const latestCheckin = checkins.length > 0 ? checkins[0] : null;
+
   return (
-    <div className="flex min-h-screen bg-zinc-950 text-white">
+    <div className="min-h-screen bg-[#09090b] text-white">
       <Sidebar />
 
-      <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full space-y-6">
-        {actionFeedback && (
-          <div
-            className={`flex items-center justify-between gap-2.5 p-3.5 rounded-xl border text-xs font-semibold shadow-lg transition-all animate-in fade-in slide-in-from-top-2 ${
-              actionFeedback.type === "success"
-                ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
-                : "bg-rose-500/10 border-rose-500/30 text-rose-300"
-            }`}
-          >
-            <div className="flex items-center gap-2.5">
-              {actionFeedback.type === "success" ? (
-                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-              ) : (
-                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
-              )}
-              <span>{actionFeedback.message}</span>
-            </div>
-            <button
-              onClick={() => setActionFeedback(null)}
-              className="text-zinc-500 hover:text-white text-xs cursor-pointer"
+      <div className="lg:pl-64 flex flex-col min-h-screen min-w-0">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full space-y-6">
+          {actionFeedback && (
+            <div
+              className={`flex items-center justify-between gap-2.5 p-3.5 rounded-xl border text-xs font-semibold shadow-lg transition-all animate-in fade-in slide-in-from-top-2 ${
+                actionFeedback.type === "success"
+                  ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
+                  : "bg-rose-500/10 border-rose-500/30 text-rose-300"
+              }`}
             >
-              ✕
-            </button>
-          </div>
-        )}
-
-        {/* Top Header & Quick Actions */}
-        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-zinc-800 pb-5">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => router.push("/")}
-              className="p-2 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white rounded-xl border border-zinc-800 transition-colors cursor-pointer"
-            >
-              <ArrowLeft className="w-4 h-4" />
-            </button>
-            <div>
               <div className="flex items-center gap-2.5">
-                <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white">
-                  {client.full_name}
-                </h1>
-                {client.is_self && (
-                  <span className="text-[11px] bg-amber-400/10 text-amber-400 border border-amber-400/30 px-2.5 py-0.5 rounded-full font-semibold">
-                    My Profile
-                  </span>
-                )}
-                {!client.active && (
-                  <span className="text-[11px] bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded font-medium">
-                    Archived
-                  </span>
-                )}
-              </div>
-              <p className="text-xs text-zinc-400 mt-0.5">
-                {client.goal || "No primary goal set"} &bull; {checkins.length} total check-ins
-              </p>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              onClick={() => setShowManualCheckinModal(true)}
-              className="px-3 py-2 bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-800 text-xs font-semibold rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer"
-            >
-              <Plus className="w-3.5 h-3.5 text-amber-400" />
-              Log Check-in
-            </button>
-
-            <button
-              onClick={() => setShowReportModal(true)}
-              className="px-3.5 py-2 bg-amber-400 hover:bg-amber-300 text-zinc-950 text-xs font-bold rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer shadow-lg shadow-amber-400/10"
-            >
-              <FileText className="w-3.5 h-3.5" />
-              Export & Reports
-            </button>
-
-            {!client.is_self && (
-              <button
-                onClick={handleGenerateInvite}
-                disabled={inviteLoading}
-                className="px-3 py-2 bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-800 text-xs font-semibold rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer"
-              >
-                <Link2 className="w-3.5 h-3.5 text-amber-400" />
-                {data.hasActiveLink ? "Copy Portal Link" : "Invite Link"}
-              </button>
-            )}
-
-            <button
-              onClick={() => {
-                setEditForm({
-                  full_name: client.full_name || "",
-                  email: client.email || "",
-                  phone: client.phone || "",
-                  goal: client.goal || "",
-                  starting_weight: client.starting_weight?.toString() || "",
-                  target_weight: client.target_weight?.toString() || "",
-                  target_date: client.target_date || "",
-                  notes: client.notes || "",
-                });
-                setShowEditModal(true);
-              }}
-              className="p-2 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white rounded-xl border border-zinc-800 cursor-pointer"
-              title="Edit Profile"
-            >
-              <Edit3 className="w-4 h-4" />
-            </button>
-
-            {!client.is_self && (
-              <button
-                onClick={handleToggleArchive}
-                className="p-2 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white rounded-xl border border-zinc-800 cursor-pointer"
-                title={client.active ? "Archive Client" : "Restore Client"}
-              >
-                {client.active ? (
-                  <Archive className="w-4 h-4" />
+                {actionFeedback.type === "success" ? (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
                 ) : (
-                  <RotateCcw className="w-4 h-4 text-emerald-400" />
+                  <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
                 )}
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Portal Link Alert (if recently generated) */}
-        {inviteUrl && (
-          <div className="bg-zinc-900 border border-amber-400/40 p-3.5 rounded-xl flex items-center justify-between gap-3 text-xs">
-            <div className="truncate">
-              <span className="font-semibold text-amber-400 block mb-0.5">
-                Client Portal Link Active
-              </span>
-              <span className="text-zinc-400 font-mono truncate block">{inviteUrl}</span>
-            </div>
-            <button
-              onClick={() => {
-                navigator.clipboard.writeText(inviteUrl);
-                setCopied(true);
-                setTimeout(() => setCopied(false), 2000);
-              }}
-              className="px-3 py-1.5 bg-amber-400 hover:bg-amber-300 text-zinc-950 font-bold rounded-lg flex items-center gap-1 cursor-pointer shrink-0"
-            >
-              {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-              {copied ? "Copied" : "Copy Link"}
-            </button>
-          </div>
-        )}
-
-        {/* ─── 6 PRIMARY TABS NAVIGATION ─── */}
-        <div className="flex border-b border-zinc-800 overflow-x-auto scrollbar-none gap-2">
-          {([
-            { id: "progress", label: "Progress", icon: TrendingUp, badge: 0 },
-            { id: "performance", label: "Performance", icon: Dumbbell, badge: 0 },
-            { id: "photos", label: "Photos", icon: Camera, badge: 0 },
-            { id: "checkins", label: "Check-ins", icon: Activity, badge: checkins.filter(c => c.status === "pending").length },
-            { id: "coach_notes", label: "Coach Notes", icon: Lock, badge: 0 },
-            { id: "overview", label: "Overview", icon: Calendar, badge: 0 },
-          ] as const).map((tab) => {
-            const Icon = tab.icon;
-            const isActive = activeTab === tab.id;
-            return (
+                <span>{actionFeedback.message}</span>
+              </div>
               <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`pb-3 px-3.5 text-xs font-semibold flex items-center gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap ${
-                  isActive
-                    ? "border-amber-400 text-amber-400"
-                    : "border-transparent text-zinc-400 hover:text-white"
-                }`}
+                onClick={() => setActionFeedback(null)}
+                className="text-zinc-500 hover:text-white text-xs cursor-pointer"
               >
-                <Icon className="w-4 h-4" />
-                {tab.label}
-                {tab.badge !== undefined && tab.badge > 0 && (
-                  <span className="bg-amber-400 text-zinc-950 text-[10px] font-bold px-1.5 py-0.2 rounded-full">
-                    {tab.badge}
-                  </span>
-                )}
+                ✕
               </button>
-            );
-          })}
-        </div>
+            </div>
+          )}
 
-        {/* ══════════════════════════════════════════════════════════
-            TAB 1: PROGRESS (First-Class Feature)
-           ══════════════════════════════════════════════════════════ */}
-        {activeTab === "progress" && (
-          <div className="space-y-6">
-            {/* Global Date Range Filter */}
-            <DateRangeSelector
-              preset={dateRangePreset}
-              onPresetChange={setDateRangePreset}
-              startDate={customStart}
-              endDate={customEnd}
-              onCustomDatesChange={(s, e) => {
-                setCustomStart(s);
-                setCustomEnd(e);
-              }}
-            />
-
-            {/* Top Visual Progress Dashboard */}
-            <ProgressSummaryCards
-              startingWeight={startingWeight}
-              currentWeight={currentWeight}
-              targetWeight={client.target_weight}
-              startingWaist={waistSummary.first}
-              currentWaist={waistSummary.latest}
-              avgDiet={dietSummary.average}
-              avgTraining={trainingSummary.average}
-              avgSteps={stepsSummary.average}
-              avgSleep={sleepSummary.average}
-              completedCheckins={checkins.filter((c) => c.status === "reviewed").length}
-              missedCheckins={checkins.filter((c) => c.status === "pending").length}
-              performanceMetrics={performanceMetrics}
-            />
-
-            {/* Interactive Charts Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {/* Weight Graph */}
-              <InteractiveChart
-                title="Bodyweight Trend"
-                clientName={client.full_name}
-                data={filteredCheckIns.map((c) => ({
-                  date: c.week_ending,
-                  formattedDate: new Date(c.week_ending).toLocaleDateString("en-GB", {
-                    day: "numeric",
-                    month: "short",
-                  }),
-                  value: c.weight,
-                  avgValue: c.average_weight,
-                }))}
-                unit=" kg"
-                color="#f59e0b"
-                showAverage={true}
-                targetValue={client.target_weight}
-                emptyMessage="No bodyweight records in the selected time range."
-              />
-
-              {/* Waist Graph */}
-              <InteractiveChart
-                title="Waist Measurement Trend"
-                clientName={client.full_name}
-                data={filteredCheckIns.map((c) => ({
-                  date: c.week_ending,
-                  formattedDate: new Date(c.week_ending).toLocaleDateString("en-GB", {
-                    day: "numeric",
-                    month: "short",
-                  }),
-                  value: c.waist_cm,
-                }))}
-                unit=" cm"
-                color="#06b6d4"
-                emptyMessage="No waist circumference records in this range."
-              />
-
-              {/* Diet Adherence */}
-              <InteractiveChart
-                title="Diet Adherence"
-                clientName={client.full_name}
-                data={filteredCheckIns.map((c) => ({
-                  date: c.week_ending,
-                  formattedDate: new Date(c.week_ending).toLocaleDateString("en-GB", {
-                    day: "numeric",
-                    month: "short",
-                  }),
-                  value: c.diet_adherence,
-                }))}
-                unit="%"
-                color="#10b981"
-                minDomain={0}
-                maxDomain={100}
-                emptyMessage="No diet adherence data recorded."
-              />
-
-              {/* Training Adherence */}
-              <InteractiveChart
-                title="Training Adherence"
-                clientName={client.full_name}
-                data={filteredCheckIns.map((c) => ({
-                  date: c.week_ending,
-                  formattedDate: new Date(c.week_ending).toLocaleDateString("en-GB", {
-                    day: "numeric",
-                    month: "short",
-                  }),
-                  value: c.training_adherence,
-                }))}
-                unit="%"
-                color="#8b5cf6"
-                minDomain={0}
-                maxDomain={100}
-                emptyMessage="No training adherence data recorded."
-              />
-
-              {/* Steps */}
-              <InteractiveChart
-                title="Daily Average Steps"
-                clientName={client.full_name}
-                data={filteredCheckIns.map((c) => ({
-                  date: c.week_ending,
-                  formattedDate: new Date(c.week_ending).toLocaleDateString("en-GB", {
-                    day: "numeric",
-                    month: "short",
-                  }),
-                  value: c.average_steps,
-                }))}
-                unit=" steps"
-                color="#3b82f6"
-                emptyMessage="No step counts recorded."
-              />
-
-              {/* Sleep */}
-              <InteractiveChart
-                title="Average Sleep"
-                clientName={client.full_name}
-                data={filteredCheckIns.map((c) => ({
-                  date: c.week_ending,
-                  formattedDate: new Date(c.week_ending).toLocaleDateString("en-GB", {
-                    day: "numeric",
-                    month: "short",
-                  }),
-                  value: c.sleep_hours,
-                }))}
-                unit=" h"
-                color="#ec4899"
-                emptyMessage="No sleep hours logged."
-              />
-
-              {/* Hunger, Energy, Stress combined or separate */}
-              <InteractiveChart
-                title="Energy & Stress (1-10 Scale)"
-                clientName={client.full_name}
-                data={filteredCheckIns.map((c) => ({
-                  date: c.week_ending,
-                  formattedDate: new Date(c.week_ending).toLocaleDateString("en-GB", {
-                    day: "numeric",
-                    month: "short",
-                  }),
-                  value: c.energy,
-                  avgValue: c.stress,
-                }))}
-                unit="/10"
-                color="#eab308"
-                avgColor="#ef4444"
-                showAverage={true}
-                minDomain={0}
-                maxDomain={10}
-                emptyMessage="No subjective ratings logged."
-              />
+          {/* ─── LEVEL 1: CLIENT IDENTITY & PRIMARY ACTIONS ─── */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-800/80 pb-5">
+            <div className="flex items-center gap-3.5 pl-10 lg:pl-0">
+              <button
+                onClick={() => router.push("/")}
+                aria-label="Back to dashboard"
+                title="Back to Dashboard"
+                className="p-2.5 bg-zinc-900/80 hover:bg-zinc-800 text-zinc-400 hover:text-white rounded-xl border border-zinc-800/80 transition-colors cursor-pointer shrink-0"
+              >
+                <ArrowLeft className="w-4 h-4" />
+              </button>
+              <div>
+                <div className="flex items-center gap-2.5 flex-wrap">
+                  <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white">
+                    {client.full_name}
+                  </h1>
+                  {client.is_self && (
+                    <span className="text-[10px] bg-amber-400/10 text-amber-400 border border-amber-400/30 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
+                      My Profile
+                    </span>
+                  )}
+                  {!client.active && (
+                    <span className="text-[10px] bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded font-medium border border-zinc-700">
+                      Archived
+                    </span>
+                  )}
+                  {latestCheckin ? (
+                    <StatusBadge status={latestCheckin.status} />
+                  ) : (
+                    <span className="text-[10px] text-zinc-500 bg-zinc-900 px-2 py-0.5 rounded border border-zinc-800 font-medium">
+                      No Check-ins
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-zinc-400 mt-1 flex items-center gap-2 flex-wrap">
+                  <span>{client.goal || "Goal not set"}</span>
+                  {client.target_weight && (
+                    <>
+                      <span className="text-zinc-600">&bull;</span>
+                      <span>Target: {client.target_weight} kg</span>
+                    </>
+                  )}
+                  <span className="text-zinc-600">&bull;</span>
+                  <span>{checkins.length} {checkins.length === 1 ? "check-in recorded" : "check-ins recorded"}</span>
+                </p>
+              </div>
             </div>
 
-            {/* Period Comparison Section */}
-            <PeriodComparisonView checkIns={sortedCheckIns} />
+            <div className="flex items-center gap-2 flex-wrap sm:justify-end pl-10 md:pl-0">
+              {/* Primary CTA */}
+              <button
+                onClick={() => setShowManualCheckinModal(true)}
+                className="px-4 py-2 bg-amber-400 hover:bg-amber-300 text-zinc-950 text-xs font-bold rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm shadow-amber-400/20"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Log Check-in</span>
+              </button>
+
+              {/* Secondary CTAs */}
+              <button
+                onClick={() => setShowReportModal(true)}
+                className="px-3.5 py-2 bg-zinc-900/80 hover:bg-zinc-800 text-zinc-200 border border-zinc-800 text-xs font-semibold rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer"
+              >
+                <FileText className="w-3.5 h-3.5 text-zinc-400" />
+                <span>Export & Reports</span>
+              </button>
+
+              {!client.is_self && (
+                <button
+                  onClick={handleGenerateInvite}
+                  disabled={inviteLoading}
+                  className="px-3.5 py-2 bg-zinc-900/80 hover:bg-zinc-800 text-zinc-200 border border-zinc-800 text-xs font-semibold rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  <Link2 className="w-3.5 h-3.5 text-zinc-400" />
+                  <span>{data.hasActiveLink ? "Copy Portal Link" : "Invite Link"}</span>
+                </button>
+              )}
+
+              {/* Edit Profile Button */}
+              <button
+                onClick={() => {
+                  setEditForm({
+                    full_name: client.full_name || "",
+                    email: client.email || "",
+                    phone: client.phone || "",
+                    goal: client.goal || "",
+                    starting_weight: client.starting_weight?.toString() || "",
+                    target_weight: client.target_weight?.toString() || "",
+                    target_date: client.target_date || "",
+                    notes: client.notes || "",
+                  });
+                  setShowEditModal(true);
+                }}
+                aria-label="Edit client profile"
+                title="Edit Profile"
+                className="p-2 bg-zinc-900/80 hover:bg-zinc-800 text-zinc-400 hover:text-white rounded-xl border border-zinc-800 transition-colors cursor-pointer"
+              >
+                <Edit3 className="w-4 h-4" />
+              </button>
+
+              {/* Archive / Restore Button */}
+              {!client.is_self && (
+                <button
+                  onClick={handleToggleArchive}
+                  aria-label={client.active ? "Archive client" : "Restore client"}
+                  title={client.active ? "Archive Client" : "Restore Client"}
+                  className="p-2 bg-zinc-900/80 hover:bg-zinc-800 text-zinc-400 hover:text-white rounded-xl border border-zinc-800 transition-colors cursor-pointer"
+                >
+                  {client.active ? (
+                    <Archive className="w-4 h-4" />
+                  ) : (
+                    <RotateCcw className="w-4 h-4 text-emerald-400" />
+                  )}
+                </button>
+              )}
+            </div>
           </div>
-        )}
+
+          {/* Portal Link Alert (if recently generated) */}
+          {inviteUrl && (
+            <div className="bg-zinc-900 border border-amber-400/40 p-3.5 rounded-xl flex items-center justify-between gap-3 text-xs">
+              <div className="truncate">
+                <span className="font-semibold text-amber-400 block mb-0.5">
+                  Client Portal Link Active
+                </span>
+                <span className="text-zinc-400 font-mono truncate block">{inviteUrl}</span>
+              </div>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(inviteUrl);
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 2000);
+                }}
+                className="px-3 py-1.5 bg-amber-400 hover:bg-amber-300 text-zinc-950 font-bold rounded-lg flex items-center gap-1 cursor-pointer shrink-0"
+              >
+                {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                {copied ? "Copied" : "Copy Link"}
+              </button>
+            </div>
+          )}
+
+          {/* ─── LEVEL 2: 6 PRIMARY TABS NAVIGATION ─── */}
+          <div className="flex border-b border-zinc-800/80 overflow-x-auto scrollbar-none gap-1 bg-zinc-900/40 p-1 rounded-xl border border-zinc-800/60">
+            {([
+              { id: "progress", label: "Progress", icon: TrendingUp, badge: 0 },
+              { id: "performance", label: "Performance", icon: Dumbbell, badge: 0 },
+              { id: "photos", label: "Photos", icon: Camera, badge: 0 },
+              { id: "checkins", label: "Check-ins", icon: Activity, badge: checkins.filter((c) => c.status === "pending").length },
+              { id: "coach_notes", label: "Coach Notes", icon: Lock, badge: 0 },
+              { id: "overview", label: "Overview", icon: Calendar, badge: 0 },
+            ] as const).map((tab) => {
+              const Icon = tab.icon;
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`py-2 px-3.5 text-xs font-semibold flex items-center gap-2 rounded-lg transition-all cursor-pointer whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/50 ${
+                    isActive
+                      ? "bg-zinc-800 text-white shadow-xs border border-zinc-700/60"
+                      : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40"
+                  }`}
+                >
+                  <Icon className={`w-3.5 h-3.5 ${isActive ? "text-amber-400" : "text-zinc-400"}`} />
+                  <span>{tab.label}</span>
+                  {tab.badge > 0 && (
+                    <span className="bg-amber-400/20 text-amber-400 border border-amber-400/30 text-[10px] font-bold px-1.5 py-0.2 rounded-full">
+                      {tab.badge}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* ══════════════════════════════════════════════════════════
+              TAB 1: PROGRESS (First-Class Feature)
+             ══════════════════════════════════════════════════════════ */}
+          {activeTab === "progress" && (
+            <div className="space-y-6">
+              {/* Level 3: Global Date Range Filter */}
+              <DateRangeSelector
+                preset={dateRangePreset}
+                onPresetChange={setDateRangePreset}
+                startDate={customStart}
+                endDate={customEnd}
+                onCustomDatesChange={(s, e) => {
+                  setCustomStart(s);
+                  setCustomEnd(e);
+                }}
+              />
+
+              {/* Level 4: Top Visual Progress Summary Grid */}
+              <ProgressSummaryCards
+                startingWeight={startingWeight}
+                currentWeight={currentWeight}
+                targetWeight={client.target_weight}
+                startingWaist={waistSummary.first}
+                currentWaist={waistSummary.latest}
+                avgDiet={dietSummary.average}
+                avgTraining={trainingSummary.average}
+                avgSteps={stepsSummary.average}
+                avgSleep={sleepSummary.average}
+                completedCheckins={checkins.filter((c) => c.status === "reviewed").length}
+                missedCheckins={checkins.filter((c) => c.status === "pending").length}
+                performanceMetrics={performanceMetrics}
+              />
+
+              {/* Level 5: Primary & Secondary Interactive Analytics Charts */}
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  {/* Weight Graph */}
+                  <InteractiveChart
+                    title="Bodyweight Trend"
+                    subtitle="Weekly check-in average"
+                    clientName={client.full_name}
+                    data={filteredCheckIns.map((c) => ({
+                      date: c.week_ending,
+                      formattedDate: new Date(c.week_ending).toLocaleDateString("en-GB", {
+                        day: "numeric",
+                        month: "short",
+                      }),
+                      value: c.weight,
+                      avgValue: c.average_weight,
+                    }))}
+                    unit=" kg"
+                    color="#f59e0b"
+                    showAverage={true}
+                    targetValue={client.target_weight}
+                    emptyMessage="No bodyweight records in the selected date range."
+                    onActionClick={() => setShowManualCheckinModal(true)}
+                    actionLabel="Log Check-in"
+                  />
+
+                  {/* Waist Graph */}
+                  <InteractiveChart
+                    title="Waist Measurement"
+                    subtitle="Waist circumference over time"
+                    clientName={client.full_name}
+                    data={filteredCheckIns.map((c) => ({
+                      date: c.week_ending,
+                      formattedDate: new Date(c.week_ending).toLocaleDateString("en-GB", {
+                        day: "numeric",
+                        month: "short",
+                      }),
+                      value: c.waist_cm,
+                    }))}
+                    unit=" cm"
+                    color="#06b6d4"
+                    emptyMessage="No waist records in the selected date range."
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {/* Diet Adherence */}
+                  <InteractiveChart
+                    title="Diet Adherence"
+                    subtitle="Nutrition target"
+                    clientName={client.full_name}
+                    data={filteredCheckIns.map((c) => ({
+                      date: c.week_ending,
+                      formattedDate: new Date(c.week_ending).toLocaleDateString("en-GB", {
+                        day: "numeric",
+                        month: "short",
+                      }),
+                      value: c.diet_adherence,
+                    }))}
+                    unit="%"
+                    color="#10b981"
+                    minDomain={0}
+                    maxDomain={100}
+                    emptyMessage="No diet adherence data."
+                  />
+
+                  {/* Training Adherence */}
+                  <InteractiveChart
+                    title="Training Adherence"
+                    subtitle="Workout program"
+                    clientName={client.full_name}
+                    data={filteredCheckIns.map((c) => ({
+                      date: c.week_ending,
+                      formattedDate: new Date(c.week_ending).toLocaleDateString("en-GB", {
+                        day: "numeric",
+                        month: "short",
+                      }),
+                      value: c.training_adherence,
+                    }))}
+                    unit="%"
+                    color="#8b5cf6"
+                    minDomain={0}
+                    maxDomain={100}
+                    emptyMessage="No training adherence data."
+                  />
+
+                  {/* Steps */}
+                  <InteractiveChart
+                    title="Daily Steps"
+                    subtitle="Activity volume"
+                    clientName={client.full_name}
+                    data={filteredCheckIns.map((c) => ({
+                      date: c.week_ending,
+                      formattedDate: new Date(c.week_ending).toLocaleDateString("en-GB", {
+                        day: "numeric",
+                        month: "short",
+                      }),
+                      value: c.average_steps,
+                    }))}
+                    unit=" st"
+                    color="#3b82f6"
+                    emptyMessage="No step counts recorded."
+                  />
+
+                  {/* Sleep */}
+                  <InteractiveChart
+                    title="Average Sleep"
+                    subtitle="Recovery duration"
+                    clientName={client.full_name}
+                    data={filteredCheckIns.map((c) => ({
+                      date: c.week_ending,
+                      formattedDate: new Date(c.week_ending).toLocaleDateString("en-GB", {
+                        day: "numeric",
+                        month: "short",
+                      }),
+                      value: c.sleep_hours,
+                    }))}
+                    unit=" h"
+                    color="#ec4899"
+                    emptyMessage="No sleep hours logged."
+                  />
+                </div>
+              </div>
+
+              {/* Level 6: Period Comparison Section */}
+              <PeriodComparisonView checkIns={sortedCheckIns} />
+            </div>
+          )}
 
         {/* ══════════════════════════════════════════════════════════
             TAB 2: PERFORMANCE TRACKING
@@ -1634,6 +1655,7 @@ export default function ClientProfilePage({
           </form>
         </Modal>
       )}
+      </div>
     </div>
   );
 }

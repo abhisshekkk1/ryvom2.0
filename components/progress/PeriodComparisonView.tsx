@@ -15,26 +15,27 @@ export default function PeriodComparisonView({ checkIns }: PeriodComparisonViewP
   const comparison = computePeriodComparison(checkIns, periodLength);
 
   return (
-    <div className="bg-zinc-900/90 border border-zinc-800/80 p-5 rounded-xl space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-800 pb-3">
+    <div className="bg-zinc-900/80 border border-zinc-800/80 p-4 sm:p-5 rounded-2xl space-y-3.5 shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-800/80 pb-3">
         <div className="flex items-center gap-2">
           <GitCompare className="w-4 h-4 text-amber-400" />
-          <h3 className="text-sm font-bold text-white uppercase tracking-wider">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-200">
             Period Comparison
           </h3>
-          <span className="text-xs text-zinc-400">
+          <span className="text-[11px] text-zinc-400">
             ({comparison.currentPeriodLabel} vs {comparison.previousPeriodLabel})
           </span>
         </div>
 
-        <div className="flex items-center gap-1 bg-zinc-950 p-1 rounded-lg border border-zinc-800">
+        <div className="inline-flex items-center p-0.5 bg-zinc-950 rounded-lg border border-zinc-800">
           {(["4w", "8w", "12w"] as const).map((len) => (
             <button
               key={len}
+              type="button"
               onClick={() => setPeriodLength(len)}
-              className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors cursor-pointer ${
+              className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-all cursor-pointer ${
                 periodLength === len
-                  ? "bg-amber-400 text-zinc-950 font-semibold"
+                  ? "bg-amber-400 text-zinc-950 shadow-xs"
                   : "text-zinc-400 hover:text-white"
               }`}
             >
@@ -44,7 +45,7 @@ export default function PeriodComparisonView({ checkIns }: PeriodComparisonViewP
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
         {comparison.metrics.map((m) => {
           const hasData = m.currentValue !== null || m.previousValue !== null;
           const isBetter =
@@ -53,32 +54,32 @@ export default function PeriodComparisonView({ checkIns }: PeriodComparisonViewP
               ? m.difference > 0
               : m.label.includes("Stress")
               ? m.difference < 0
-              : null); // For weight/waist, coach interprets whether loss/gain is desired
+              : null);
 
           return (
             <div
               key={m.label}
-              className="bg-zinc-950/80 border border-zinc-800/80 p-3.5 rounded-lg flex flex-col justify-between"
+              className="bg-zinc-950/70 border border-zinc-800/80 p-3 rounded-xl flex flex-col justify-between"
             >
-              <div className="flex items-center justify-between text-xs text-zinc-400 font-medium mb-2">
-                <span>{m.label}</span>
-                <span className="text-[11px] text-zinc-500">[{m.unit}]</span>
+              <div className="flex items-center justify-between text-xs text-zinc-400 font-medium mb-1.5">
+                <span className="text-zinc-300 font-semibold">{m.label}</span>
+                <span className="text-[10px] text-zinc-400 font-mono">[{m.unit}]</span>
               </div>
 
               {hasData ? (
                 <div>
-                  <div className="flex items-center justify-between text-sm font-semibold">
+                  <div className="flex items-center justify-between text-xs sm:text-sm font-semibold">
                     <span className="text-zinc-400 font-normal">
                       {m.previousValue !== null ? formatNum(m.previousValue, 1) : "—"}
                     </span>
-                    <ArrowRight className="w-3.5 h-3.5 text-zinc-600" />
+                    <ArrowRight className="w-3 h-3 text-zinc-600" />
                     <span className="text-white font-bold">
                       {m.currentValue !== null ? formatNum(m.currentValue, 1) : "—"}
                     </span>
                   </div>
 
-                  <div className="mt-2 pt-2 border-t border-zinc-900 flex items-center justify-between text-xs">
-                    <span className="text-zinc-500">Difference:</span>
+                  <div className="mt-2 pt-1.5 border-t border-zinc-850 flex items-center justify-between text-[11px]">
+                    <span className="text-zinc-400">Difference:</span>
                     <div className="flex items-center gap-1">
                       {m.difference !== null ? (
                         <>
@@ -102,21 +103,21 @@ export default function PeriodComparisonView({ checkIns }: PeriodComparisonViewP
                           >
                             {formatDiff(m.difference, 1)} {m.unit}
                             {m.percentageDifference !== null && (
-                              <span className="text-[10px] text-zinc-500 ml-1">
+                              <span className="text-[10px] text-zinc-400 ml-1">
                                 ({formatDiff(m.percentageDifference, 1, "%")})
                               </span>
                             )}
                           </span>
                         </>
                       ) : (
-                        <span className="text-zinc-500 italic text-[11px]">Insufficient data</span>
+                        <span className="text-zinc-400 italic text-[11px]">Insufficient data</span>
                       )}
                     </div>
                   </div>
                 </div>
               ) : (
-                <div className="text-xs text-zinc-600 italic py-2">
-                  Insufficient data
+                <div className="text-xs text-zinc-400 italic py-1">
+                  Insufficient data for this range
                 </div>
               )}
             </div>
