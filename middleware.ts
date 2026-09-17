@@ -4,9 +4,35 @@ import { createServerClient } from "@supabase/ssr";
 const COACH_EMAIL = "abhishek0442@gmail.com";
 
 export async function middleware(request: NextRequest) {
-  let supabaseResponse = NextResponse.next({ request });
   const pathname = request.nextUrl.pathname;
 
+  // 1. FAST-PATH: bypass public paths before any async operations
+  const isPublicPath =
+    pathname.startsWith("/login") ||
+    pathname.startsWith("/auth") ||
+    pathname.startsWith("/client/") ||
+    pathname.startsWith("/api/client-portal/") ||
+    pathname.startsWith("/_next") ||
+    pathname === "/favicon.ico" ||
+    pathname === "/manifest.webmanifest" ||
+    /\.(png|jpg|jpeg|svg|webp|gif|css|js|ico|woff2?)$/.test(pathname);
+
+  if (isPublicPath) {
+    return NextResponse.next();
+  }
+
+  // 2. CHECK COOKIES before making network calls
+  const allCookies = request.cookies.getAll();
+  const hasAuthCookie = allCookies.some(
+    (c) => c.name.startsWith("sb-") || c.name === "ryvom_user"
+  );
+
+  if (!hasAuthCookie) {
+    return NextResponse.redirect(new URL("/login", request.url));
+  }
+
+  // 3. INITIALIZE SUPABASE and verify session
+  const supabaseResponse = NextResponse.next({ request });
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -14,29 +40,33 @@ export async function middleware(request: NextRequest) {
       cookies: {
         getAll: () => request.cookies.getAll(),
         setAll: (cookiesToSet) => {
-          cookiesToSet.forEach(({ name, value, options }) => supabaseResponse.cookies.set(name, value, options));
+          cookiesToSet.forEach(({ name, value, options }) =>
+            supabaseResponse.cookies.set(name, value, options)
+          );
         },
       },
-    },
+    }
   );
 
-  const { data: { user } } = await supabase.auth.getUser();
+  // 4. FETCH USER with timeout protection
+  try {
+    const getUserPromise = supabase.auth.getUser();
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("Supabase auth timeout")), 3000)
+    );
 
-  const isPublicPath =
-    pathname.startsWith("/login") ||
-    pathname.startsWith("/auth") ||
-    pathname.startsWith("/_next") ||
-    pathname.startsWith("/api") ||
-    pathname === "/favicon.ico" ||
-    pathname === "/manifest.webmanifest" ||
-    /\.(png|jpg|jpeg|svg|webp|gif|css|js)$/.test(pathname);
+    const {
+      data: { user },
+    } = await Promise.race([getUserPromise, timeoutPromise]);
 
-  if (isPublicPath) return supabaseResponse;
-
-  if (!user || user.email?.toLowerCase() !== COACH_EMAIL) {
-    await supabase.auth.signOut();
-    const loginUrl = new URL("/login", request.url);
-    return NextResponse.redirect(loginUrl);
+    if (!user) {
+      // No session — sign out and redirect
+      await supabase.auth.signOut().catch(() => {});
+      return NextResponse.redirect(new URL("/login", request.url));
+    }
+  } catch {
+    console.warn("Auth check timed out or failed in middleware");
+    return NextResponse.redirect(new URL("/login", request.url));
   }
 
   return supabaseResponse;
@@ -44,6 +74,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|.*\\.(?:svg|png|jpg|jpeg|gif|webp|css|js|ico)$).*)",
   ],
 };

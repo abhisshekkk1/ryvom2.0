@@ -69,7 +69,7 @@ export default async function PublicProfilePage(props: PublicProfileProps) {
   const userId = profile.user_id || profile.id;
 
   // 2. MAKE STAT FETCHING FAULT-TOLERANT:
-  
+
   // a) Peak Weight in a separate try/catch block
   let peakWeight: number | null = null;
   try {
@@ -221,7 +221,7 @@ export default async function PublicProfilePage(props: PublicProfileProps) {
 
       {/* Main Link-in-Bio Minimalist Container */}
       <main className="flex-1 max-w-xl w-full mx-auto px-4 py-10 space-y-8">
-        
+
         {/* SECTION 1: HEADER (@username & bio) */}
         <section className="text-center space-y-4">
           <div className="inline-block p-1 rounded-full bg-gradient-to-tr from-[#ff334b] via-[#ff5b6e] to-purple-600 shadow-xl shadow-[#ff334b]/20">

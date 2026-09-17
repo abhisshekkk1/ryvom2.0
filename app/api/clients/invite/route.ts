@@ -11,7 +11,7 @@ export async function POST(request: Request) {
     cookies: { getAll: () => cookieStore.getAll(), setAll: () => {} },
   });
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user || user.email?.toLowerCase() !== COACH_EMAIL) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const body = await request.json();
   if (!body.client_id) return NextResponse.json({ error: "client_id is required" }, { status: 400 });
   const { data: client } = await supabase.from("clients").select("id").eq("id", body.client_id).eq("coach_user_id", user.id).single();

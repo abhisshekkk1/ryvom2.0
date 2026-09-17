@@ -1,0 +1,100 @@
+import { NextResponse } from "next/server";
+import { getCoachAuth } from "@/lib/supabase/server";
+
+// GET /api/clients/[id]/checkins — fetch all check-ins for a client
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+  const { supabase, user } = await getCoachAuth();
+  if (!supabase || !user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // Verify client belongs to coach
+  const { data: client } = await supabase
+    .from("clients")
+    .select("id")
+    .eq("id", id)
+    .eq("coach_user_id", user.id)
+    .single();
+
+  if (!client) {
+    return NextResponse.json({ error: "Client not found" }, { status: 404 });
+  }
+
+  const { data: checkins, error } = await supabase
+    .from("check_ins")
+    .select("*")
+    .eq("client_id", id)
+    .order("week_ending", { ascending: false });
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ checkins: checkins || [] });
+}
+
+// POST /api/clients/[id]/checkins — coach logs a check-in for a client
+export async function POST(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+  const { supabase, user } = await getCoachAuth();
+  if (!supabase || !user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // Verify client belongs to coach
+  const { data: client } = await supabase
+    .from("clients")
+    .select("id")
+    .eq("id", id)
+    .eq("coach_user_id", user.id)
+    .single();
+
+  if (!client) {
+    return NextResponse.json({ error: "Client not found" }, { status: 404 });
+  }
+
+  const body = await request.json();
+
+  if (!body.week_ending) {
+    return NextResponse.json({ error: "week_ending date is required" }, { status: 400 });
+  }
+
+  const payload = {
+    client_id: id,
+    week_ending: body.week_ending,
+    weight: body.weight ?? null,
+    average_weight: body.average_weight ?? null,
+    waist_cm: body.waist_cm ?? null,
+    diet_adherence: body.diet_adherence ?? null,
+    training_adherence: body.training_adherence ?? null,
+    average_steps: body.average_steps ?? null,
+    sleep_hours: body.sleep_hours ?? null,
+    hunger: body.hunger ?? null,
+    energy: body.energy ?? null,
+    stress: body.stress ?? null,
+    client_notes: body.client_notes?.trim() || null,
+    photo_front_url: body.photo_front_url || null,
+    photo_side_url: body.photo_side_url || null,
+    photo_back_url: body.photo_back_url || null,
+    status: body.status || "reviewed", // if coach logs it directly, defaults to reviewed
+  };
+
+  const { data, error } = await supabase
+    .from("check_ins")
+    .upsert(payload, { onConflict: "client_id,week_ending" })
+    .select("*")
+    .single();
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ checkin: data }, { status: 201 });
+}
