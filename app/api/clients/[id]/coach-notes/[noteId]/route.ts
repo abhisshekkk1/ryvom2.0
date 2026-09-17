@@ -25,7 +25,7 @@ export async function DELETE(
   }
 
   const { error } = await supabase
-    .from("coach_notes")
+    .from("client_coach_notes")
     .delete()
     .eq("id", noteId)
     .eq("client_id", id);

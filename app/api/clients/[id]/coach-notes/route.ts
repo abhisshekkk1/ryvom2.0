@@ -25,7 +25,7 @@ export async function GET(
   }
 
   const { data: notes, error } = await supabase
-    .from("coach_notes")
+    .from("client_coach_notes")
     .select("*")
     .eq("client_id", id)
     .order("note_date", { ascending: false });
@@ -67,7 +67,7 @@ export async function POST(
   }
 
   const { data, error } = await supabase
-    .from("coach_notes")
+    .from("client_coach_notes")
     .insert({
       client_id: id,
       note_date: body.note_date || new Date().toISOString().split("T")[0],
