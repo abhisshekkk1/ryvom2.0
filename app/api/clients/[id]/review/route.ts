@@ -1,26 +1,44 @@
 import { NextResponse } from "next/server";
 import { getCoachAuth } from "@/lib/supabase/server";
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 // POST /api/clients/[id]/review — save coach review for a check-in
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id: clientId } = await params;
+  if (!clientId || !UUID_REGEX.test(clientId)) {
+    return NextResponse.json({ error: "Invalid client ID format" }, { status: 400 });
+  }
+
   const { supabase, user } = await getCoachAuth();
   if (!supabase || !user)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  // Verify client belongs to this coach
+  const { data: client } = await supabase
+    .from("clients")
+    .select("id")
+    .eq("id", clientId)
+    .eq("coach_user_id", user.id)
+    .single();
+
+  if (!client) {
+    return NextResponse.json({ error: "Client not found" }, { status: 404 });
+  }
+
   const body = await request.json();
   const { check_in_id, wins, issues, adjustments, next_week_goals, coach_notes, status } = body;
 
-  if (!check_in_id)
+  if (!check_in_id || !UUID_REGEX.test(check_in_id))
     return NextResponse.json(
-      { error: "check_in_id is required" },
+      { error: "Valid check_in_id is required" },
       { status: 400 }
     );
 
-  // Verify the check-in belongs to this coach's client
+  // Verify the check-in belongs to this client
   const { data: checkin } = await supabase
     .from("check_ins")
     .select("id, client_id")

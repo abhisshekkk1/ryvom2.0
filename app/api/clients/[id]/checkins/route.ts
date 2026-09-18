@@ -7,12 +7,18 @@ import {
   attachSignedPhotoUrlsToCheckins,
 } from "@/lib/photoStorage";
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 // GET /api/clients/[id]/checkins — fetch all check-ins for a client
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+  if (!id || !UUID_REGEX.test(id)) {
+    return NextResponse.json({ error: "Invalid client ID format" }, { status: 400 });
+  }
+
   const { supabase, user } = await getCoachAuth();
   if (!supabase || !user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -32,7 +38,7 @@ export async function GET(
 
   const { data: rawCheckins, error } = await supabase
     .from("check_ins")
-    .select("*")
+    .select("id, client_id, week_ending, submitted_at, weight, average_weight, waist_cm, diet_adherence, training_adherence, average_steps, sleep_hours, hunger, energy, stress, client_notes, photo_front_url, photo_side_url, photo_back_url, status, created_at, updated_at")
     .eq("client_id", id)
     .order("week_ending", { ascending: false });
 
@@ -69,6 +75,10 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+  if (!id || !UUID_REGEX.test(id)) {
+    return NextResponse.json({ error: "Invalid client ID format" }, { status: 400 });
+  }
+
   const { supabase, user } = await getCoachAuth();
   if (!supabase || !user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -131,7 +141,7 @@ export async function POST(
   const { data, error } = await supabase
     .from("check_ins")
     .upsert(payload, { onConflict: "client_id,week_ending" })
-    .select("*")
+    .select("id, client_id, week_ending, submitted_at, weight, average_weight, waist_cm, diet_adherence, training_adherence, average_steps, sleep_hours, hunger, energy, stress, client_notes, photo_front_url, photo_side_url, photo_back_url, status, created_at, updated_at")
     .single();
 
   if (error) {

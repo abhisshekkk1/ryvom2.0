@@ -13,7 +13,7 @@ export async function GET(request: Request) {
 
   const { data: clients, error } = await supabase
     .from("clients")
-    .select("*")
+    .select("id, full_name, email, phone, goal, starting_weight, target_weight, target_date, active, created_at")
     .eq("coach_user_id", user.id)
     .eq("active", !showArchived)
     .eq("is_self", false)
@@ -24,19 +24,50 @@ export async function GET(request: Request) {
   }
 
   if (!clients?.length) {
-    return NextResponse.json({ clients: [], checkins: [] });
+    return NextResponse.json({ clients: [], checkins: [], totalCheckins: 0 });
   }
 
   const clientIds = clients.map((c: { id: string }) => c.id);
-  const { data: checkins } = await supabase
+
+  // 1. Get total historical check-in count without downloading rows (exact HEAD query)
+  const countPromise = supabase
     .from("check_ins")
-    .select("*")
-    .in("client_id", clientIds)
-    .order("week_ending", { ascending: false });
+    .select("id", { count: "exact", head: true })
+    .in("client_id", clientIds);
+
+  // 2. Fetch only the latest 2 check-ins per client (efficient RPC or optimized fallback query)
+  const rpcPromise = supabase.rpc("get_dashboard_checkins");
+
+  const [countRes, rpcRes] = await Promise.all([countPromise, rpcPromise]);
+
+  let checkins: Array<Record<string, unknown>> = [];
+
+  if (!rpcRes.error && Array.isArray(rpcRes.data)) {
+    checkins = rpcRes.data;
+  } else {
+    // Graceful fallback if RPC function is not installed: fetch only essential columns
+    const { data: rawCheckins } = await supabase
+      .from("check_ins")
+      .select("id, client_id, week_ending, weight, waist_cm, diet_adherence, training_adherence, sleep_hours, stress, status")
+      .in("client_id", clientIds)
+      .order("week_ending", { ascending: false });
+
+    // Restrict in memory to at most 2 latest check-ins per client
+    const perClientCount = new Map<string, number>();
+    checkins = (rawCheckins || []).filter((ci) => {
+      const count = perClientCount.get(ci.client_id) || 0;
+      if (count < 2) {
+        perClientCount.set(ci.client_id, count + 1);
+        return true;
+      }
+      return false;
+    });
+  }
 
   return NextResponse.json({
     clients: clients || [],
-    checkins: checkins || [],
+    checkins,
+    totalCheckins: countRes.count ?? checkins.length,
   });
 }
 

@@ -1,12 +1,18 @@
 import { NextResponse } from "next/server";
 import { getCoachAuth } from "@/lib/supabase/server";
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 // GET /api/clients/[id]/performance — list metrics and logs for a client
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+  if (!id || !UUID_REGEX.test(id)) {
+    return NextResponse.json({ error: "Invalid client ID format" }, { status: 400 });
+  }
+
   const { supabase, user } = await getCoachAuth();
   if (!supabase || !user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -27,7 +33,7 @@ export async function GET(
   // Fetch metrics
   const { data: metrics, error: metricsErr } = await supabase
     .from("performance_metrics")
-    .select("*")
+    .select("id, client_id, name, unit, metric_type, target_value, track_on_checkin, show_on_dashboard, created_at")
     .eq("client_id", id)
     .order("created_at", { ascending: true });
 
@@ -42,7 +48,7 @@ export async function GET(
   // Fetch logs for all metrics of this client
   const { data: logs, error: logsErr } = await supabase
     .from("performance_logs")
-    .select("*")
+    .select("id, metric_id, client_id, check_in_id, logged_date, value, notes, created_at")
     .eq("client_id", id)
     .order("logged_date", { ascending: true });
 
@@ -65,6 +71,10 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+  if (!id || !UUID_REGEX.test(id)) {
+    return NextResponse.json({ error: "Invalid client ID format" }, { status: 400 });
+  }
+
   const { supabase, user } = await getCoachAuth();
   if (!supabase || !user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -99,7 +109,7 @@ export async function POST(
       track_on_checkin: Boolean(body.track_on_checkin),
       show_on_dashboard: body.show_on_dashboard !== false,
     })
-    .select("*")
+    .select("id, client_id, name, unit, metric_type, target_value, track_on_checkin, show_on_dashboard, created_at")
     .single();
 
   if (error) {

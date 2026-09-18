@@ -13,6 +13,8 @@ const ALLOWED_MIME_TYPES = new Set([
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export async function POST(
   request: Request,
   context: { params: Promise<{ id: string }> }
@@ -24,6 +26,9 @@ export async function POST(
     }
 
     const { id } = await context.params;
+    if (!id || !UUID_REGEX.test(id)) {
+      return NextResponse.json({ error: "Invalid client ID format." }, { status: 400 });
+    }
 
     // Verify coach owns this client
     const { data: client, error: clientError } = await supabase

@@ -44,10 +44,11 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#09090b]">
+    <div className="flex min-h-screen bg-[#09090b] text-white">
       <Sidebar />
 
-      <main className="lg:pl-64">
+      <div className="flex-1 min-w-0 flex flex-col min-h-screen">
+        <main className="flex-1">
         <header className="sticky top-0 z-10 border-b border-zinc-800/80 bg-[#09090b]/90 px-5 py-4 backdrop-blur md:px-8">
           <div className="pl-12 lg:pl-0">
             <h1 className="text-lg font-semibold">Settings</h1>
@@ -117,5 +118,6 @@ export default function SettingsPage() {
         </div>
       </main>
     </div>
-  );
+  </div>
+);
 }

@@ -54,60 +54,87 @@ export async function GET(
     );
   }
 
-  const { data: rawCheckins, error: checkinsError } = await supabase
-    .from("check_ins")
-    .select("*")
-    .eq("client_id", id)
-    .order("week_ending", { ascending: false });
+  const url = new URL(_request.url);
+  const includePhotos = url.searchParams.get("photos") === "true";
 
-  if (checkinsError) {
-    console.error("Error fetching checkins:", checkinsError);
+  // Execute independent sub-queries in parallel
+  const [checkinsRes, reviewsRes, accessRes, metricsRes, logsRes, notesRes] = await Promise.all([
+    supabase
+      .from("check_ins")
+      .select("id, client_id, week_ending, submitted_at, weight, average_weight, waist_cm, diet_adherence, training_adherence, average_steps, sleep_hours, hunger, energy, stress, client_notes, photo_front_url, photo_side_url, photo_back_url, status, created_at, updated_at")
+      .eq("client_id", id)
+      .order("week_ending", { ascending: false }),
+    supabase
+      .from("coach_reviews")
+      .select("id, check_in_id, coach_notes, wins, issues, adjustments, next_week_goals, reviewed_at")
+      .in(
+        "check_in_id",
+        (await supabase.from("check_ins").select("id").eq("client_id", id)).data?.map((c) => c.id) || []
+      ),
+    supabase
+      .from("client_access")
+      .select("id, active, created_at, last_used_at")
+      .eq("client_id", id)
+      .eq("active", true)
+      .limit(1),
+    supabase
+      .from("performance_metrics")
+      .select("id, client_id, name, unit, metric_type, target_value, track_on_checkin, show_on_dashboard, created_at")
+      .eq("client_id", id)
+      .order("created_at", { ascending: true }),
+    supabase
+      .from("performance_logs")
+      .select("id, metric_id, client_id, check_in_id, logged_date, value, notes, created_at")
+      .eq("client_id", id)
+      .order("logged_date", { ascending: true }),
+    supabase
+      .from("client_coach_notes")
+      .select("id, client_id, note_date, note, category, created_at")
+      .eq("client_id", id)
+      .order("note_date", { ascending: false }),
+  ]);
+
+  if (checkinsRes.error) {
+    console.error("Error fetching checkins:", checkinsRes.error);
   }
 
-  // Resolve private photo paths to temporary signed URLs safely
-  let storageClient = supabase;
-  if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  let checkins = checkinsRes.data || [];
+
+  // Only perform photo signing round-trips when explicitly requested (e.g. photos tab)
+  if (includePhotos && checkins.length > 0) {
+    let storageClient = supabase;
+    if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      try {
+        storageClient = createAdminSupabase();
+      } catch {
+        // Fallback to authenticated coach client
+      }
+    }
+
     try {
-      storageClient = createAdminSupabase();
-    } catch {
-      // Fallback to authenticated coach client
+      checkins = await attachSignedPhotoUrlsToCheckins(
+        storageClient,
+        checkins,
+        id
+      );
+    } catch (photoErr) {
+      console.warn("Storage sign URL fallback:", photoErr);
     }
   }
 
-  let checkins = rawCheckins || [];
-  try {
-    checkins = await attachSignedPhotoUrlsToCheckins(
-      storageClient,
-      rawCheckins || [],
-      id
-    );
-  } catch (photoErr) {
-    console.warn("Storage sign URL fallback:", photoErr);
-  }
-
-  const checkinIds = checkins.map((c) => c.id);
-  let reviews: Record<string, unknown>[] = [];
-  if (checkinIds.length) {
-    const { data: r } = await supabase
-      .from("coach_reviews")
-      .select("*")
-      .in("check_in_id", checkinIds);
-    reviews = r || [];
-  }
-
-  // Check for active access link
-  const { data: access } = await supabase
-    .from("client_access")
-    .select("id, active, created_at, last_used_at")
-    .eq("client_id", id)
-    .eq("active", true)
-    .limit(1);
+  // Combine metrics with their logs
+  const metricsWithLogs = (metricsRes.data || []).map((m) => ({
+    ...m,
+    logs: (logsRes.data || []).filter((l) => l.metric_id === m.id),
+  }));
 
   return NextResponse.json({
     client,
     checkins,
-    reviews,
-    hasActiveLink: (access?.length || 0) > 0,
+    reviews: reviewsRes.data || [],
+    hasActiveLink: (accessRes.data?.length || 0) > 0,
+    metrics: metricsWithLogs,
+    coachNotes: notesRes.data || [],
   });
 }
 

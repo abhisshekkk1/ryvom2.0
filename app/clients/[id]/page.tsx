@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
 import Image from "next/image";
 import {
   ArrowLeft,
@@ -33,10 +34,24 @@ import DateRangeSelector from "@/components/progress/DateRangeSelector";
 import ProgressSummaryCards from "@/components/progress/ProgressSummaryCards";
 import InteractiveChart from "@/components/progress/InteractiveChart";
 import PeriodComparisonView from "@/components/progress/PeriodComparisonView";
-import PerformanceTracker from "@/components/progress/PerformanceTracker";
-import PhotoCompareView from "@/components/progress/PhotoCompareView";
-import CoachNotesTimeline from "@/components/progress/CoachNotesTimeline";
-import ReportGeneratorModal from "@/components/progress/ReportGeneratorModal";
+
+// Dynamically import heavy tab-specific components and modals to code-split bundles
+const PerformanceTracker = dynamic(
+  () => import("@/components/progress/PerformanceTracker"),
+  { ssr: false, loading: () => <div className="h-64 rounded-xl bg-zinc-900/50 animate-pulse" /> }
+);
+const PhotoCompareView = dynamic(
+  () => import("@/components/progress/PhotoCompareView"),
+  { ssr: false, loading: () => <div className="h-64 rounded-xl bg-zinc-900/50 animate-pulse" /> }
+);
+const CoachNotesTimeline = dynamic(
+  () => import("@/components/progress/CoachNotesTimeline"),
+  { ssr: false, loading: () => <div className="h-64 rounded-xl bg-zinc-900/50 animate-pulse" /> }
+);
+const ReportGeneratorModal = dynamic(
+  () => import("@/components/progress/ReportGeneratorModal"),
+  { ssr: false }
+);
 import {
   computeMetricSummary,
   filterCheckInsByRange,
@@ -148,6 +163,22 @@ export default function ClientProfilePage({
     photo_back_url: "",
   });
   const [manualSubmitting, setManualSubmitting] = useState(false);
+  const [photosSigned, setPhotosSigned] = useState(false);
+
+  // On-demand photo URL resolution: only resolve when the Photos tab is opened
+  useEffect(() => {
+    if (activeTab === "photos" && !photosSigned && id && id !== "undefined") {
+      void fetch(`/api/clients/${id}?photos=true`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => {
+          if (d?.checkins) {
+            setData((prev) => (prev ? { ...prev, checkins: d.checkins } : prev));
+            setPhotosSigned(true);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [activeTab, photosSigned, id]);
 
   const loadData = useCallback(async () => {
     if (!id || id === "undefined") {
@@ -158,7 +189,7 @@ export default function ClientProfilePage({
       setLoading(true);
       setError(null);
 
-      // Fetch client & check-ins
+      // Fetch client & check-ins (with consolidated initial data)
       const res = await fetch(`/api/clients/${id}`);
       if (!res.ok) {
         if (res.status === 401) {
@@ -180,19 +211,27 @@ export default function ClientProfilePage({
       const json = await res.json();
       setData(json);
 
-      // Fetch performance metrics
-      const perfRes = await fetch(`/api/clients/${id}/performance`);
-      if (perfRes.ok) {
-        const perfJson = await perfRes.json();
-        const computed = (perfJson.metrics || []).map(computePerformancePRs);
-        setPerformanceMetrics(computed);
-      }
+      // 1. If consolidated metrics and notes were returned in the initial payload, use them immediately
+      if (Array.isArray(json.metrics) && Array.isArray(json.coachNotes)) {
+        setPerformanceMetrics(json.metrics.map(computePerformancePRs));
+        setCoachNotes(json.coachNotes);
+      } else {
+        // 2. Fallback: Fetch performance metrics and coach notes in PARALLEL
+        const [perfRes, notesRes] = await Promise.all([
+          fetch(`/api/clients/${id}/performance`),
+          fetch(`/api/clients/${id}/coach-notes`),
+        ]);
 
-      // Fetch coach notes
-      const notesRes = await fetch(`/api/clients/${id}/coach-notes`);
-      if (notesRes.ok) {
-        const notesJson = await notesRes.json();
-        setCoachNotes(notesJson.notes || []);
+        if (perfRes.ok) {
+          const perfJson = await perfRes.json();
+          const computed = (perfJson.metrics || []).map(computePerformancePRs);
+          setPerformanceMetrics(computed);
+        }
+
+        if (notesRes.ok) {
+          const notesJson = await notesRes.json();
+          setCoachNotes(notesJson.notes || []);
+        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load client");
@@ -433,11 +472,59 @@ export default function ClientProfilePage({
     }
   }
 
+  const client = data?.client;
+  const checkins = useMemo(() => data?.checkins || [], [data?.checkins]);
+  const reviews = useMemo(() => data?.reviews || [], [data?.reviews]);
+
+  const sortedCheckIns = useMemo(() => {
+    return sortCheckInsChronologically(checkins);
+  }, [checkins]);
+
+  const filteredCheckIns = useMemo(() => {
+    return filterCheckInsByRange(
+      sortedCheckIns,
+      dateRangePreset,
+      customStart,
+      customEnd
+    );
+  }, [sortedCheckIns, dateRangePreset, customStart, customEnd]);
+
+  // Map reviews by check-in ID
+  const reviewMap = useMemo(() => {
+    const map: Record<string, CoachReview> = {};
+    for (const r of reviews) {
+      map[r.check_in_id] = r;
+    }
+    return map;
+  }, [reviews]);
+
+  // Memoize high-level progress summaries so re-renders don't recompute
+  const {
+    weightSummary,
+    waistSummary,
+    dietSummary,
+    trainingSummary,
+    stepsSummary,
+    sleepSummary,
+  } = useMemo(() => ({
+    weightSummary: computeMetricSummary(filteredCheckIns, "weight"),
+    waistSummary: computeMetricSummary(filteredCheckIns, "waist_cm"),
+    dietSummary: computeMetricSummary(filteredCheckIns, "diet_adherence"),
+    trainingSummary: computeMetricSummary(filteredCheckIns, "training_adherence"),
+    stepsSummary: computeMetricSummary(filteredCheckIns, "average_steps"),
+    sleepSummary: computeMetricSummary(filteredCheckIns, "sleep_hours"),
+  }), [filteredCheckIns]);
+
+  // Determine starting weight and current weight
+  const startingWeight = client?.starting_weight ?? weightSummary.first;
+  const currentWeight = weightSummary.latest ?? startingWeight;
+  const latestCheckin = checkins.length > 0 ? checkins[0] : null;
+
   if (!id || id === "undefined" || loading) {
     return (
-      <div className="min-h-screen bg-[#09090b] text-white">
+      <div className="flex min-h-screen bg-[#09090b] text-white">
         <Sidebar />
-        <div className="lg:pl-64 flex flex-col min-h-screen">
+        <div className="flex-1 min-w-0 flex flex-col min-h-screen">
           <main className="flex-1 p-8 flex items-center justify-center">
             <LoadingState message="Loading client profile..." />
           </main>
@@ -446,11 +533,11 @@ export default function ClientProfilePage({
     );
   }
 
-  if (error || !data) {
+  if (error || !data || !client) {
     return (
-      <div className="min-h-screen bg-[#09090b] text-white">
+      <div className="flex min-h-screen bg-[#09090b] text-white">
         <Sidebar />
-        <div className="lg:pl-64 flex flex-col min-h-screen">
+        <div className="flex-1 min-w-0 flex flex-col min-h-screen">
           <main className="flex-1 p-8 flex items-center justify-center">
             <div className="flex flex-col items-center justify-center py-16 px-4 text-center max-w-md">
               <div className="mb-4 text-red-400">
@@ -483,40 +570,11 @@ export default function ClientProfilePage({
     );
   }
 
-  const { client, checkins, reviews } = data;
-  const sortedCheckIns = sortCheckInsChronologically(checkins);
-  const filteredCheckIns = filterCheckInsByRange(
-    sortedCheckIns,
-    dateRangePreset,
-    customStart,
-    customEnd
-  );
-
-  // Map reviews by check-in ID
-  const reviewMap: Record<string, CoachReview> = {};
-  reviews.forEach((r) => {
-    reviewMap[r.check_in_id] = r;
-  });
-
-  // Calculate high-level progress summaries
-  const weightSummary = computeMetricSummary(filteredCheckIns, "weight");
-  const waistSummary = computeMetricSummary(filteredCheckIns, "waist_cm");
-  const dietSummary = computeMetricSummary(filteredCheckIns, "diet_adherence");
-  const trainingSummary = computeMetricSummary(filteredCheckIns, "training_adherence");
-  const stepsSummary = computeMetricSummary(filteredCheckIns, "average_steps");
-  const sleepSummary = computeMetricSummary(filteredCheckIns, "sleep_hours");
-
-  // Determine starting weight and current weight
-  const startingWeight = client.starting_weight ?? weightSummary.first;
-  const currentWeight = weightSummary.latest ?? startingWeight;
-
-  const latestCheckin = checkins.length > 0 ? checkins[0] : null;
-
   return (
-    <div className="min-h-screen bg-[#09090b] text-white">
+    <div className="flex min-h-screen bg-[#09090b] text-white">
       <Sidebar />
 
-      <div className="lg:pl-64 flex flex-col min-h-screen min-w-0">
+      <div className="flex-1 min-w-0 flex flex-col min-h-screen">
         <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full space-y-6">
           {actionFeedback && (
             <div
@@ -941,9 +999,20 @@ export default function ClientProfilePage({
                     >
                       {/* Check-in Row Header */}
                       <div
-                        onClick={() =>
-                          setExpandedCheckin(isExpanded ? null : c.id)
-                        }
+                        onClick={() => {
+                          if (isExpanded) {
+                            setExpandedCheckin(null);
+                          } else {
+                            setExpandedCheckin(c.id);
+                            setReviewForm({
+                              wins: review?.wins || "",
+                              issues: review?.issues || "",
+                              adjustments: review?.adjustments || "",
+                              next_week_goals: review?.next_week_goals || "",
+                              coach_notes: review?.coach_notes || "",
+                            });
+                          }
+                        }}
                         className="p-4 flex flex-wrap items-center justify-between gap-3 cursor-pointer hover:bg-zinc-800/40"
                       >
                         <div className="flex items-center gap-3">
@@ -1106,7 +1175,7 @@ export default function ClientProfilePage({
                                 <textarea
                                   rows={2}
                                   placeholder="Great adherence, hit step target..."
-                                  defaultValue={review?.wins || ""}
+                                  value={reviewForm.wins}
                                   onChange={(e) =>
                                     setReviewForm((prev) => ({
                                       ...prev,
@@ -1124,7 +1193,7 @@ export default function ClientProfilePage({
                                 <textarea
                                   rows={2}
                                   placeholder="Sleep dipped midweek, hunger elevated..."
-                                  defaultValue={review?.issues || ""}
+                                  value={reviewForm.issues}
                                   onChange={(e) =>
                                     setReviewForm((prev) => ({
                                       ...prev,
@@ -1142,7 +1211,7 @@ export default function ClientProfilePage({
                                 <textarea
                                   rows={2}
                                   placeholder="Add 100g carbs on training days, 15m extra sleep buffer..."
-                                  defaultValue={review?.adjustments || ""}
+                                  value={reviewForm.adjustments}
                                   onChange={(e) =>
                                     setReviewForm((prev) => ({
                                       ...prev,
@@ -1160,7 +1229,7 @@ export default function ClientProfilePage({
                                 <textarea
                                   rows={2}
                                   placeholder="Hit 95% diet adherence, complete all 4 lifts..."
-                                  defaultValue={review?.next_week_goals || ""}
+                                  value={reviewForm.next_week_goals}
                                   onChange={(e) =>
                                     setReviewForm((prev) => ({
                                       ...prev,

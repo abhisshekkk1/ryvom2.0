@@ -1,12 +1,18 @@
 import { NextResponse } from "next/server";
 import { getCoachAuth } from "@/lib/supabase/server";
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 // POST /api/clients/[id]/performance/log — record a performance entry
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+  if (!id || !UUID_REGEX.test(id)) {
+    return NextResponse.json({ error: "Invalid client ID format." }, { status: 400 });
+  }
+
   const { supabase, user } = await getCoachAuth();
   if (!supabase || !user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -26,9 +32,9 @@ export async function POST(
 
   const body = await request.json();
 
-  if (!body.metric_id || body.value === undefined || body.value === null) {
+  if (!body.metric_id || !UUID_REGEX.test(body.metric_id) || body.value === undefined || body.value === null) {
     return NextResponse.json(
-      { error: "metric_id and numeric value are required" },
+      { error: "A valid metric_id UUID and numeric value are required" },
       { status: 400 }
     );
   }
@@ -66,7 +72,7 @@ export async function POST(
       value: numericVal,
       notes: body.notes?.trim() || null,
     })
-    .select("*")
+    .select("id, metric_id, client_id, check_in_id, logged_date, value, notes, created_at")
     .single();
 
   if (error) {
@@ -82,6 +88,10 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+  if (!id || !UUID_REGEX.test(id)) {
+    return NextResponse.json({ error: "Invalid client ID format." }, { status: 400 });
+  }
+
   const { supabase, user } = await getCoachAuth();
   if (!supabase || !user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -102,8 +112,8 @@ export async function DELETE(
   const url = new URL(request.url);
   const logId = url.searchParams.get("logId");
 
-  if (!logId) {
-    return NextResponse.json({ error: "logId is required" }, { status: 400 });
+  if (!logId || !UUID_REGEX.test(logId)) {
+    return NextResponse.json({ error: "A valid logId UUID is required." }, { status: 400 });
   }
 
   const { error } = await supabase

@@ -1,12 +1,18 @@
 import { NextResponse } from "next/server";
 import { getCoachAuth } from "@/lib/supabase/server";
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 // GET /api/clients/[id]/coach-notes — list private coach notes
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+  if (!id || !UUID_REGEX.test(id)) {
+    return NextResponse.json({ error: "Invalid client ID format" }, { status: 400 });
+  }
+
   const { supabase, user } = await getCoachAuth();
   if (!supabase || !user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -26,7 +32,7 @@ export async function GET(
 
   const { data: notes, error } = await supabase
     .from("client_coach_notes")
-    .select("*")
+    .select("id, client_id, note_date, note, category, created_at")
     .eq("client_id", id)
     .order("note_date", { ascending: false });
 
@@ -43,6 +49,10 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+  if (!id || !UUID_REGEX.test(id)) {
+    return NextResponse.json({ error: "Invalid client ID format" }, { status: 400 });
+  }
+
   const { supabase, user } = await getCoachAuth();
   if (!supabase || !user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -74,7 +84,7 @@ export async function POST(
       note: body.note.trim(),
       category: body.category || "general",
     })
-    .select("*")
+    .select("id, client_id, note_date, note, category, created_at")
     .single();
 
   if (error) {

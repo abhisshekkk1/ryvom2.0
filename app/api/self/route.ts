@@ -11,7 +11,7 @@ export async function GET() {
   // Look for existing self client record
   const { data: existing, error: fetchErr } = await supabase
     .from("clients")
-    .select("*")
+    .select("id, coach_user_id, full_name, email, phone, goal, starting_weight, target_weight, target_date, notes, active, is_self, created_at, updated_at")
     .eq("coach_user_id", user.id)
     .eq("is_self", true)
     .maybeSingle();
@@ -35,14 +35,14 @@ export async function GET() {
       is_self: true,
       active: true,
     })
-    .select("*")
+    .select("id, coach_user_id, full_name, email, phone, goal, starting_weight, target_weight, target_date, notes, active, is_self, created_at, updated_at")
     .single();
 
   if (insertErr) {
     // If unique constraint violation or concurrent insert occurred, attempt to fetch existing
     const { data: retryProfile } = await supabase
       .from("clients")
-      .select("*")
+      .select("id, coach_user_id, full_name, email, phone, goal, starting_weight, target_weight, target_date, notes, active, is_self, created_at, updated_at")
       .eq("coach_user_id", user.id)
       .eq("is_self", true)
       .maybeSingle();
@@ -78,7 +78,7 @@ export async function PUT(request: Request) {
     })
     .eq("coach_user_id", user.id)
     .eq("is_self", true)
-    .select("*")
+    .select("id, coach_user_id, full_name, email, phone, goal, starting_weight, target_weight, target_date, notes, active, is_self, created_at, updated_at")
     .single();
 
   if (error) {

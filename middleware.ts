@@ -34,7 +34,14 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  // 3. INITIALIZE SUPABASE and verify session
+  // 3. FAST-PATH FOR API ROUTES:
+  // Route handlers perform their own authoritative getCoachAuth() verification.
+  // Passing through here eliminates a redundant second network call to Supabase Auth on every API request.
+  if (pathname.startsWith("/api/")) {
+    return NextResponse.next();
+  }
+
+  // 4. INITIALIZE SUPABASE and verify session for Page Routes
   const supabaseResponse = NextResponse.next({ request });
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

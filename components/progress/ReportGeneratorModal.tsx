@@ -2,8 +2,6 @@
 
 import React, { useState } from "react";
 import { FileText, Download, Check, X, Printer, Archive, Copy } from "lucide-react";
-import jsPDF from "jspdf";
-import JSZip from "jszip";
 import { Client, CheckIn, CoachReview, PerformanceWithLogs, CoachTimelineNote } from "@/lib/types";
 import { computeMetricSummary, formatNum, formatDiff } from "@/lib/progressAnalytics";
 
@@ -155,6 +153,7 @@ export default function ReportGeneratorModal({
   const handleGeneratePDF = async () => {
     setIsGenerating(true);
     try {
+      const { default: jsPDF } = await import("jspdf");
       const doc = new jsPDF({
         orientation: "portrait",
         unit: "mm",
@@ -402,6 +401,7 @@ export default function ReportGeneratorModal({
   const handleExportZip = async () => {
     setIsGenerating(true);
     try {
+      const { default: JSZip } = await import("jszip");
       const zip = new JSZip();
 
       // 1. Snapshot text file
