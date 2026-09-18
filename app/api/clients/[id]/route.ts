@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getCoachAuth } from "@/lib/supabase/server";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 import { attachSignedPhotoUrlsToCheckins } from "@/lib/photoStorage";
+import type { CoachReview } from "@/lib/types";
 
 // UUID validation regex
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -66,11 +67,8 @@ export async function GET(
       .order("week_ending", { ascending: false }),
     supabase
       .from("coach_reviews")
-      .select("id, check_in_id, coach_notes, wins, issues, adjustments, next_week_goals, reviewed_at")
-      .in(
-        "check_in_id",
-        (await supabase.from("check_ins").select("id").eq("client_id", id)).data?.map((c) => c.id) || []
-      ),
+      .select("id, check_in_id, coach_notes, wins, issues, adjustments, next_week_goals, reviewed_at, check_ins!inner(client_id)")
+      .eq("check_ins.client_id", id),
     supabase
       .from("client_access")
       .select("id, active, created_at, last_used_at")
@@ -97,8 +95,18 @@ export async function GET(
   if (checkinsRes.error) {
     console.error("Error fetching checkins:", checkinsRes.error);
   }
+  if (reviewsRes.error) {
+    console.error("Error fetching reviews:", reviewsRes.error);
+  }
 
   let checkins = checkinsRes.data || [];
+
+  // Strip the joined check_ins relationship to preserve exact CoachReview shape
+  const reviews: CoachReview[] = (reviewsRes.data || []).map((r) => {
+    const review = { ...(r as Record<string, unknown>) };
+    delete review.check_ins;
+    return review as unknown as CoachReview;
+  });
 
   // Only perform photo signing round-trips when explicitly requested (e.g. photos tab)
   if (includePhotos && checkins.length > 0) {
@@ -131,7 +139,7 @@ export async function GET(
   return NextResponse.json({
     client,
     checkins,
-    reviews: reviewsRes.data || [],
+    reviews,
     hasActiveLink: (accessRes.data?.length || 0) > 0,
     metrics: metricsWithLogs,
     coachNotes: notesRes.data || [],
