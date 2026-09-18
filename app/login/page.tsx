@@ -40,7 +40,7 @@ export default function LoginPage() {
     setLoading(true);
     setError(null);
     if (email.trim().toLowerCase() !== COACH_EMAIL.toLowerCase()) {
-      setError("This is a private Ryvom coach account. Only abhishek0442@gmail.com is authorized.");
+      setError("This is a private Ryvom coach account.");
       setLoading(false);
       return;
     }
@@ -140,7 +140,7 @@ export default function LoginPage() {
                 type="email"
                 autoComplete="email"
                 required
-                placeholder="abhishek0442@gmail.com"
+                placeholder="Enter your coach email"
                 className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 outline-none focus:border-zinc-500 transition-colors"
               />
             </div>
@@ -156,7 +156,7 @@ export default function LoginPage() {
                   autoComplete="current-password"
                   required
                   className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 pr-11 outline-none focus:border-zinc-500 transition-colors"
-                  placeholder="••••••••"
+                  placeholder="Enter your password"
                 />
                 <button
                   type="button"
