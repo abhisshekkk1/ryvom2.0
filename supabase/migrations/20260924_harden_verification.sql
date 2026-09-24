@@ -23,7 +23,7 @@ from pg_proc p
 join pg_namespace n on n.oid = p.pronamespace
 where n.nspname = 'public'
   and p.proname in ('set_updated_at', 'get_dashboard_checkins')
-order by p.proname;
+ORDER BY p.proname;
 
 -- ------------------------------------------------------------------------------
 -- 2. VERIFY SECURITY ADVISOR LINTER CHECKS (ALL 3 MUST RETURN 0 ROWS)
