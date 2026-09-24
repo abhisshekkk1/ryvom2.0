@@ -47,9 +47,6 @@ async function main() {
       },
     });
 
-    // After migration, role 'anon' has REVOKE ALL, resulting in 401 or 403 or 404 or empty due to RLS
-    // Specifically, if grants are revoked, PostgREST returns 401 Unauthorized or 403 Forbidden:
-    // {"code":"42501","message":"permission denied for table password_reset_requests"}
     if (res.status === 401 || res.status === 403) {
       assert.ok(true, "Anon read properly rejected with HTTP 401/403");
     } else if (res.status === 200) {
@@ -139,11 +136,56 @@ async function main() {
     }
   });
 
-  console.log("\n2. Coach & Tenant Isolation Policies (Workout Logs):");
+  console.log("\n2. RPC Security & Isolation (get_dashboard_checkins):");
 
-  // Test 6: Coach A cannot access Coach B's workout logs
+  // Test 6: anon RPC call is rejected or exposes 0 rows
+  await test("anon RPC call to get_dashboard_checkins exposes 0 data or is rejected", async () => {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/get_dashboard_checkins`, {
+      method: "POST",
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({}),
+    });
+
+    if (res.status === 401 || res.status === 403 || res.status === 404) {
+      assert.ok(true, "Anon RPC call rejected with 401/403/404");
+    } else if (res.status === 200) {
+      const rows = await res.json();
+      assert.equal(rows.length, 0, "Anon caller must receive 0 rows from get_dashboard_checkins");
+    } else {
+      assert.fail(`Unexpected status ${res.status} returned for anon RPC call`);
+    }
+  });
+
+  // Test 7: input manipulation rejection (cannot pass fake coach_id)
+  await test("get_dashboard_checkins rejects arbitrary parameter tampering", async () => {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/get_dashboard_checkins`, {
+      method: "POST",
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        coach_user_id: "00000000-0000-0000-0000-000000000000",
+        malicious_param: "true",
+      }),
+    });
+
+    // PostgREST will reject unknown parameters with 400 or 401/403/404
+    assert.ok(
+      res.status === 400 || res.status === 401 || res.status === 403 || res.status === 404,
+      `Parameter injection must be rejected, got ${res.status}`
+    );
+  });
+
+  console.log("\n3. Coach & Tenant Isolation Policies (Workout Logs):");
+
+  // Test 8: Coach A cannot access Coach B's workout logs
   await test("cross-coach isolation: spoofed user ID query returns 0 rows or fails", async () => {
-    // Attempt to filter or query for a victim coach's user_id using unauthenticated/anon request
     const victimCoachId = "a0000000-0000-0000-0000-000000000001";
     const res = await fetch(`${SUPABASE_URL}/rest/v1/workout_logs?user_id=eq.${victimCoachId}`, {
       headers: {
@@ -162,9 +204,9 @@ async function main() {
     }
   });
 
-  console.log("\n3. Legitimate Application Health & Invariants:");
+  console.log("\n4. Legitimate Application Health & Invariants:");
 
-  // Test 7: Modern RYVOM platform tables remain functional
+  // Test 9: Modern RYVOM platform tables remain functional
   await test("core application tables (clients, check_ins) are protected by RLS", async () => {
     for (const table of ["clients", "check_ins", "coach_reviews", "client_coach_notes"]) {
       const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?select=*&limit=1`, {
