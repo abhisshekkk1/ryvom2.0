@@ -1,9 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { type User } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
-
-const COACH_EMAIL = "abhishek0442@gmail.com";
-
 export async function createServerSupabase() {
   const cookieStore = await cookies();
   return createServerClient(
@@ -45,7 +42,7 @@ export async function getCoachAuth() {
       const email = claims.email;
       const id = claims.sub;
 
-      if (!id || !email || email.toLowerCase() !== COACH_EMAIL.toLowerCase()) {
+      if (!id || !email) {
         return { supabase: null, user: null };
       }
 
@@ -70,11 +67,9 @@ export async function getCoachAuth() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user || user.email?.toLowerCase() !== COACH_EMAIL.toLowerCase()) {
+  if (!user) {
     return { supabase: null, user: null };
   }
 
   return { supabase, user };
 }
-
-export { COACH_EMAIL };

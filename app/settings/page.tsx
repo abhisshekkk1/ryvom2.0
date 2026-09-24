@@ -1,16 +1,26 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
 import { createBrowserSupabase } from "@/lib/supabase/client";
 
 export default function SettingsPage() {
   const router = useRouter();
+  const [email, setEmail] = useState<string>("");
   const [newPassword, setNewPassword] = useState("");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const supabase = createBrowserSupabase();
+    supabase.auth.getUser().then(({ data }) => {
+      if (data?.user?.email) {
+        setEmail(data.user.email);
+      }
+    });
+  }, []);
 
   async function handleChangePassword() {
     if (!newPassword || newPassword.length < 6) {
@@ -65,7 +75,7 @@ export default function SettingsPage() {
             <div className="flex justify-between border-t border-zinc-800/70 py-3 text-sm">
               <span className="text-zinc-500">Email</span>
               <span className="font-medium text-zinc-300">
-                abhishek0442@gmail.com
+                {email || "—"}
               </span>
             </div>
             <div className="flex justify-between border-t border-zinc-800/70 py-3 text-sm">

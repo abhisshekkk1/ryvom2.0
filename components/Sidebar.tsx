@@ -11,7 +11,7 @@ import {
   Menu,
   X,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 const NAV_ITEMS = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -25,6 +25,22 @@ export default function Sidebar() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [trainerName, setTrainerName] = useState<string>("Coach");
+
+  useEffect(() => {
+    const supabase = createBrowserSupabase();
+    supabase.auth.getUser().then(({ data }) => {
+      if (data?.user) {
+        const metaName = data.user.user_metadata?.full_name || data.user.user_metadata?.name;
+        if (metaName && typeof metaName === "string" && metaName.trim()) {
+          setTrainerName(metaName.trim());
+        } else if (data.user.email) {
+          const localPart = data.user.email.split("@")[0];
+          setTrainerName(localPart.charAt(0).toUpperCase() + localPart.slice(1));
+        }
+      }
+    });
+  }, []);
 
   async function handleLogout() {
     setLoggingOut(true);
@@ -100,7 +116,7 @@ export default function Sidebar() {
             Coach Account
           </div>
           <div className="mt-0.5 text-xs font-semibold truncate text-zinc-200">
-            Abhishek
+            {trainerName}
           </div>
         </div>
       </div>

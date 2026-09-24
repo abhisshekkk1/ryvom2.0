@@ -5,8 +5,6 @@ import Image from "next/image";
 import { createBrowserClient } from "@supabase/ssr";
 import { Eye, EyeOff } from "lucide-react";
 
-const COACH_EMAIL = "abhishek0442@gmail.com";
-
 const getSupabase = () =>
   createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -39,11 +37,6 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
     setError(null);
-    if (email.trim().toLowerCase() !== COACH_EMAIL.toLowerCase()) {
-      setError("This is a private Ryvom coach account.");
-      setLoading(false);
-      return;
-    }
 
     try {
       const { data, error: authError } =
