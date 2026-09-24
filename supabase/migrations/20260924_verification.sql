@@ -33,8 +33,8 @@ where schemaname = 'public'
 
 -- ------------------------------------------------------------------------------
 -- 3. VERIFY TABLE GRANTS
--- - password_reset_requests: anon, authenticated, public MUST HAVE 0 GRANTS.
--- - workout_logs: anon, public MUST HAVE 0 GRANTS. authenticated has SELECT, INSERT, UPDATE, DELETE.
+-- Both tables: anon, authenticated, public MUST HAVE 0 GRANTS.
+-- Only service_role should have privileges.
 -- ------------------------------------------------------------------------------
 select 
   grantee,
@@ -50,8 +50,7 @@ order by table_name, grantee;
 
 -- ------------------------------------------------------------------------------
 -- 4. VERIFY ROW LEVEL SECURITY POLICIES
--- - password_reset_requests: 0 policies (complete lockout from Data API).
--- - workout_logs: exactly 4 policies strictly scoped to user_id = auth.uid().
+-- Both tables: 0 policies (complete lockout from PostgREST Data API).
 -- ------------------------------------------------------------------------------
 select 
   schemaname,

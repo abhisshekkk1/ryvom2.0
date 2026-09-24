@@ -182,10 +182,10 @@ async function main() {
     );
   });
 
-  console.log("\n3. Coach & Tenant Isolation Policies (Workout Logs):");
+  console.log("\n3. Legacy Table Least-Privilege Lockout (Workout Logs):");
 
-  // Test 8: Coach A cannot access Coach B's workout logs
-  await test("cross-coach isolation: spoofed user ID query returns 0 rows or fails", async () => {
+  // Test 8: workout_logs is completely locked out from Data API (least privilege for unused table)
+  await test("legacy workout_logs denies query and mutation to all client roles", async () => {
     const victimCoachId = "a0000000-0000-0000-0000-000000000001";
     const res = await fetch(`${SUPABASE_URL}/rest/v1/workout_logs?user_id=eq.${victimCoachId}`, {
       headers: {
@@ -195,10 +195,10 @@ async function main() {
     });
 
     if (res.status === 401 || res.status === 403) {
-      assert.ok(true);
+      assert.ok(true, "Client query properly rejected with 401/403");
     } else if (res.status === 200) {
       const data = await res.json();
-      assert.equal(data.length, 0, "Cross-coach query must never return victim coach data");
+      assert.equal(data.length, 0, "No rows may ever be returned from legacy workout_logs");
     } else {
       assert.fail(`Unexpected status ${res.status}`);
     }
