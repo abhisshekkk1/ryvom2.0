@@ -19,45 +19,62 @@ export default function AcceptInvitePage() {
   const [success, setSuccess] = useState(false);
 
   useEffect(() => {
+    let isMounted = true;
+    let authSubscription: { unsubscribe: () => void } | null = null;
+    let timer: NodeJS.Timeout | null = null;
+
     const supabase = createBrowserSupabase();
 
-    // Check current session
-    supabase.auth.getUser().then(({ data, error: userError }) => {
-      if (userError || !data?.user) {
-        // If not immediately available, listen for auth state change (e.g. from hash parsing)
+    async function checkSession() {
+      try {
+        const { data, error: userError } = await supabase.auth.getUser();
+        if (!isMounted) return;
+
+        if (data?.user && !userError) {
+          setUserEmail(data.user.email || null);
+          const metaName =
+            data.user.user_metadata?.full_name ||
+            data.user.user_metadata?.name;
+          setUserName(typeof metaName === "string" ? metaName : null);
+          setLoading(false);
+          return;
+        }
+
+        // If session is still establishing in the browser, listen for auth change
         const { data: authListener } = supabase.auth.onAuthStateChange(
-          (event, session) => {
+          (_event, session) => {
+            if (!isMounted) return;
             if (session?.user) {
               setUserEmail(session.user.email || null);
               const metaName =
                 session.user.user_metadata?.full_name ||
                 session.user.user_metadata?.name;
-              setUserName(
-                typeof metaName === "string" ? metaName : null
-              );
+              setUserName(typeof metaName === "string" ? metaName : null);
               setLoading(false);
             }
           }
         );
+        authSubscription = authListener.subscription;
 
-        // Fallback after 2.5s if no session was exchanged
-        const timer = setTimeout(() => {
-          setLoading(false);
-        }, 2500);
-
-        return () => {
-          authListener.subscription.unsubscribe();
-          clearTimeout(timer);
-        };
-      } else {
-        setUserEmail(data.user.email || null);
-        const metaName =
-          data.user.user_metadata?.full_name ||
-          data.user.user_metadata?.name;
-        setUserName(typeof metaName === "string" ? metaName : null);
-        setLoading(false);
+        // Fallback after 2s if no session is detected
+        timer = setTimeout(() => {
+          if (isMounted) {
+            setLoading(false);
+          }
+        }, 2000);
+      } catch (err) {
+        console.error("Session detection error:", err);
+        if (isMounted) setLoading(false);
       }
-    });
+    }
+
+    checkSession();
+
+    return () => {
+      isMounted = false;
+      if (authSubscription) authSubscription.unsubscribe();
+      if (timer) clearTimeout(timer);
+    };
   }, []);
 
   async function handleSubmit(e: FormEvent) {

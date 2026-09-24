@@ -55,7 +55,7 @@ export async function POST(request: Request) {
   try {
     const admin = createAdminSupabase();
     const origin = new URL(request.url).origin;
-    const redirectTo = `${origin}/auth/callback?next=/auth/accept-invite`;
+    const redirectTo = `${origin}/auth/confirm?redirect_to=/auth/accept-invite`;
 
     const { data, error } = await admin.auth.admin.inviteUserByEmail(email, {
       data: {

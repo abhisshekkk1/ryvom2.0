@@ -3,9 +3,22 @@ import { createServerClient } from "@supabase/ssr";
 
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
+
+  // If token_hash and type are present, delegate to /auth/confirm
+  const token_hash = searchParams.get("token_hash");
+  const type = searchParams.get("type");
+  if (token_hash && type) {
+    const confirmUrl = new URL("/auth/confirm", origin);
+    searchParams.forEach((val, key) => confirmUrl.searchParams.set(key, val));
+    return NextResponse.redirect(confirmUrl);
+  }
+
   const code = searchParams.get("code");
   const next = searchParams.get("next") || "/";
-  const safeNext = next.startsWith("/") && !next.startsWith("//") ? next : "/";
+  const safeNext =
+    next.startsWith("/") && !next.startsWith("//") && !next.startsWith("/\\")
+      ? next
+      : "/";
 
   const response = NextResponse.redirect(new URL(safeNext, origin));
   const supabase = createServerClient(
