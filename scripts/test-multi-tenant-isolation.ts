@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash, randomBytes } from "node:crypto";
-import { extractPhotoPath, validatePhotoOwnership, isSignedPhotoUrl } from "../lib/photoStorage";
-import { NextRequest, NextResponse } from "next/server";
+import { extractPhotoPath, validatePhotoOwnership } from "../lib/photoStorage";
+import { NextRequest } from "next/server";
 import { middleware } from "../middleware";
 import { isPlatformAdmin, PLATFORM_ADMIN_EMAIL } from "../lib/adminConstants";
 
