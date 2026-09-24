@@ -10,10 +10,12 @@ import {
   LogOut,
   Menu,
   X,
+  ShieldCheck,
 } from "lucide-react";
 import { useState, useEffect } from "react";
+import { isPlatformAdmin } from "@/lib/adminConstants";
 
-const NAV_ITEMS = [
+const BASE_NAV_ITEMS = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/my-progress", label: "My Progress", icon: TrendingUp },
   { href: "/clients", label: "Clients", icon: Users },
@@ -26,11 +28,15 @@ export default function Sidebar() {
   const [open, setOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const [trainerName, setTrainerName] = useState<string>("Coach");
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     const supabase = createBrowserSupabase();
     supabase.auth.getUser().then(({ data }) => {
       if (data?.user) {
+        if (data.user.email && isPlatformAdmin(data.user.email)) {
+          setIsAdmin(true);
+        }
         const metaName = data.user.user_metadata?.full_name || data.user.user_metadata?.name;
         if (metaName && typeof metaName === "string" && metaName.trim()) {
           setTrainerName(metaName.trim());
@@ -54,6 +60,13 @@ export default function Sidebar() {
     return pathname.startsWith(href);
   }
 
+  const navItems = [
+    ...BASE_NAV_ITEMS,
+    ...(isAdmin
+      ? [{ href: "/trainers", label: "Trainers", icon: ShieldCheck }]
+      : []),
+  ];
+
   const renderNavContent = () => (
     <div className="flex flex-col h-full justify-between">
       <div>
@@ -76,7 +89,7 @@ export default function Sidebar() {
         </div>
 
         <nav className="mt-8 space-y-1">
-          {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
+          {navItems.map(({ href, label, icon: Icon }) => {
             const active = isActive(href);
             return (
               <button
