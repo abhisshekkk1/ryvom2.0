@@ -1,0 +1,248 @@
+name: RYVOM Database Backup (Phase 2A)
+
+on:
+  schedule:
+    # Run daily at 02:00 UTC (07:30 IST)
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    # Allows manual test execution from GitHub Actions UI
+
+concurrency:
+  group: ryvom-database-backup
+  cancel-in-progress: false
+
+env:
+  MAX_BACKUP_SIZE_MB: 400
+  RETENTION_DAYS: 7
+
+jobs:
+  backup:
+    name: Database Dump, Encrypt & Artifact Archive
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Ensure PostgreSQL Client & Tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y postgresql-client jq
+          echo "pg_dump version: $(pg_dump --version)"
+          echo "openssl version: $(openssl version)"
+
+      - name: Validate & Mask Required Secrets
+        env:
+          RYVOM_DB_URL: ${{ secrets.RYVOM_DB_URL }}
+          RYVOM_BACKUP_ENCRYPTION_KEY: ${{ secrets.RYVOM_BACKUP_ENCRYPTION_KEY }}
+        run: |
+          if [ -z "$RYVOM_DB_URL" ]; then
+            echo "::error::Missing required secret: RYVOM_DB_URL"
+            exit 1
+          fi
+          if [ -z "$RYVOM_BACKUP_ENCRYPTION_KEY" ]; then
+            echo "::error::Missing required secret: RYVOM_BACKUP_ENCRYPTION_KEY"
+            exit 1
+          fi
+          if [ ${#RYVOM_BACKUP_ENCRYPTION_KEY} -lt 16 ]; then
+            echo "::error::RYVOM_BACKUP_ENCRYPTION_KEY must be at least 16 characters long."
+            exit 1
+          fi
+
+          # Ensure secrets are masked in workflow logs
+          echo "::add-mask::$RYVOM_DB_URL"
+          echo "::add-mask::$RYVOM_BACKUP_ENCRYPTION_KEY"
+          echo "✓ Required secrets present and masked."
+
+      - name: Prepare Backup Staging
+        run: |
+          TIMESTAMP=$(date -u +"%Y-%m-%d_%H%M%S")
+          DATE_ONLY=$(date -u +"%Y-%m-%d")
+          echo "BACKUP_TIMESTAMP=$TIMESTAMP" >> $GITHUB_ENV
+          echo "BACKUP_DATE=$DATE_ONLY" >> $GITHUB_ENV
+          mkdir -p backup_artifacts
+          mkdir -p verify_staging
+
+      - name: Connect & Export Database
+        env:
+          RYVOM_DB_URL: ${{ secrets.RYVOM_DB_URL }}
+        run: |
+          echo "==> Testing database connectivity..."
+          psql "$RYVOM_DB_URL" -c "SELECT 1 as connection_test;" -t > /dev/null
+
+          echo "==> Exporting public application schema in PostgreSQL custom format (-Fc)..."
+          pg_dump "$RYVOM_DB_URL" \
+            --format=custom \
+            --schema=public \
+            --no-owner \
+            --no-privileges \
+            --file="backup_artifacts/ryvom_public.dump"
+
+          if [ ! -s "backup_artifacts/ryvom_public.dump" ]; then
+            echo "::error::pg_dump failed or produced an empty file."
+            exit 1
+          fi
+
+          echo "==> Exporting safe trainer Auth UUID mapping (id, email, metadata)..."
+          # Preserves trainer UUIDs for foreign keys (clients.coach_user_id references auth.users.id)
+          psql "$RYVOM_DB_URL" -t -A -c \
+            "SELECT coalesce(json_agg(json_build_object('id', id, 'email', email, 'raw_user_meta_data', raw_user_meta_data, 'created_at', created_at)), '[]'::json) FROM auth.users;" \
+            > "backup_artifacts/auth_trainers_mapping.json"
+
+          if [ ! -s "backup_artifacts/auth_trainers_mapping.json" ]; then
+            echo "::error::auth_trainers_mapping export failed or produced an empty file."
+            exit 1
+          fi
+
+          echo "✓ Database dump and trainer mapping completed successfully."
+
+      - name: Compress & Encrypt Backup
+        env:
+          RYVOM_BACKUP_ENCRYPTION_KEY: ${{ secrets.RYVOM_BACKUP_ENCRYPTION_KEY }}
+        run: |
+          ARCHIVE_NAME="ryvom-db-${BACKUP_DATE}.dump.gz"
+          ENCRYPTED_NAME="${ARCHIVE_NAME}.enc"
+
+          echo "==> Archiving and compressing dump and trainer mapping..."
+          tar -czf "backup_artifacts/${ARCHIVE_NAME}" \
+            -C backup_artifacts ryvom_public.dump auth_trainers_mapping.json
+
+          echo "==> Encrypting archive with OpenSSL AES-256-CBC PBKDF2 (100,000 iterations)..."
+          openssl enc -aes-256-cbc -salt -pbkdf2 -iter 100000 \
+            -in "backup_artifacts/${ARCHIVE_NAME}" \
+            -out "backup_artifacts/${ENCRYPTED_NAME}" \
+            -pass env:RYVOM_BACKUP_ENCRYPTION_KEY
+
+          # Securely remove unencrypted raw files immediately
+          rm -f backup_artifacts/ryvom_public.dump \
+                backup_artifacts/auth_trainers_mapping.json \
+                "backup_artifacts/${ARCHIVE_NAME}"
+
+          if [ ! -s "backup_artifacts/${ENCRYPTED_NAME}" ]; then
+            echo "::error::Encrypted backup file was not created or is empty."
+            exit 1
+          fi
+
+          echo "ENCRYPTED_FILENAME=${ENCRYPTED_NAME}" >> $GITHUB_ENV
+          echo "✓ Compression and AES-256-CBC encryption completed."
+
+      - name: Calculate Checksum & Verify Quota Threshold
+        run: |
+          ENCRYPTED_FILE="backup_artifacts/${ENCRYPTED_FILENAME}"
+
+          # Compute SHA-256 checksum
+          CHECKSUM=$(sha256sum "$ENCRYPTED_FILE" | awk '{print $1}')
+          echo "$CHECKSUM  ${ENCRYPTED_FILENAME}" > "backup_artifacts/${ENCRYPTED_FILENAME}.sha256"
+          echo "BACKUP_CHECKSUM=$CHECKSUM" >> $GITHUB_ENV
+
+          # File size checks
+          SIZE_BYTES=$(stat -c%s "$ENCRYPTED_FILE")
+          SIZE_MB=$(awk "BEGIN {printf \"%.2f\", $SIZE_BYTES / 1048576}")
+          echo "BACKUP_SIZE_BYTES=$SIZE_BYTES" >> $GITHUB_ENV
+          echo "BACKUP_SIZE_MB=$SIZE_MB" >> $GITHUB_ENV
+
+          echo "Encrypted backup size: ${SIZE_MB} MB (${SIZE_BYTES} bytes)"
+          echo "SHA-256 Checksum: ${CHECKSUM}"
+
+          # Check against GitHub Free safety threshold (400 MB)
+          node -e '
+            const sizeBytes = Number(process.env.BACKUP_SIZE_BYTES);
+            const maxMb = Number(process.env.MAX_BACKUP_SIZE_MB);
+            const sizeMb = sizeBytes / (1024 * 1024);
+            if (sizeMb >= maxMb) {
+              console.error(`::error::Backup size (${sizeMb.toFixed(2)} MB) exceeds GitHub Free threshold of ${maxMb} MB.`);
+              process.exit(1);
+            }
+          '
+
+          echo "✓ Backup size is within safe GitHub Free quota limits."
+
+      - name: Generate Non-Sensitive Manifest
+        run: |
+          cat << EOF > backup_artifacts/manifest.json
+          {
+            "version": "1.0",
+            "timestamp": "${BACKUP_TIMESTAMP}",
+            "git_commit_sha": "${{ github.sha }}",
+            "backup_filename": "${ENCRYPTED_FILENAME}",
+            "backup_size_bytes": ${BACKUP_SIZE_BYTES},
+            "backup_size_mb": "${BACKUP_SIZE_MB} MB",
+            "sha256_checksum": "${BACKUP_CHECKSUM}",
+            "encryption": "AES-256-CBC-PBKDF2-100K",
+            "format": "postgresql-custom-in-tar.gz.enc",
+            "included_schemas": ["public"],
+            "included_auth_mapping": ["auth.users(id, email, raw_user_meta_data, created_at)"],
+            "retention_days": ${RETENTION_DAYS},
+            "max_allowed_size_mb": ${MAX_BACKUP_SIZE_MB},
+            "verification_status": "verified"
+          }
+          EOF
+
+          echo "Manifest content:"
+          cat backup_artifacts/manifest.json
+
+      - name: Verify Decryption & Dump Structural Integrity
+        env:
+          RYVOM_BACKUP_ENCRYPTION_KEY: ${{ secrets.RYVOM_BACKUP_ENCRYPTION_KEY }}
+        run: |
+          echo "==> Testing local decryption of backup..."
+          openssl enc -d -aes-256-cbc -pbkdf2 -iter 100000 \
+            -in "backup_artifacts/${ENCRYPTED_FILENAME}" \
+            -out "verify_staging/test_decrypted.tar.gz" \
+            -pass env:RYVOM_BACKUP_ENCRYPTION_KEY
+
+          echo "==> Testing archive extraction..."
+          tar -xzf "verify_staging/test_decrypted.tar.gz" -C verify_staging/
+
+          echo "==> Validating PostgreSQL dump TOC using pg_restore --list..."
+          pg_restore --list "verify_staging/ryvom_public.dump" > verify_staging/toc.txt
+          PUBLIC_TABLES=$(grep -c "TABLE DATA public" verify_staging/toc.txt || true)
+          echo "Found ${PUBLIC_TABLES} public tables in dump."
+          if [ "$PUBLIC_TABLES" -eq 0 ]; then
+            echo "::error::pg_restore TOC validation found 0 public tables in backup."
+            exit 1
+          fi
+
+          echo "==> Validating auth_trainers_mapping.json format..."
+          jq -e 'type == "array"' verify_staging/auth_trainers_mapping.json > /dev/null
+          TRAINERS_COUNT=$(jq '. | length' verify_staging/auth_trainers_mapping.json)
+          echo "Validated auth_trainers_mapping.json (found ${TRAINERS_COUNT} user identities)."
+
+          # Clean up verification files
+          rm -rf verify_staging
+          echo "✓ Decryption and structural verification SUCCEEDED."
+
+      - name: Upload Backup Artifact to GitHub Actions
+        uses: actions/upload-artifact@v4
+        with:
+          name: ryvom-database-backup-${{ env.BACKUP_DATE }}
+          path: |
+            backup_artifacts/*.enc
+            backup_artifacts/manifest.json
+            backup_artifacts/*.sha256
+          retention-days: 7
+          if-no-files-found: error
+
+      - name: Publish Workflow Summary
+        run: |
+          cat << EOF >> $GITHUB_STEP_SUMMARY
+          ### 🛡️ RYVOM Database Backup Summary (Phase 2A)
+
+          - **Status**: ✅ Succeeded & Verified
+          - **Date**: \`${BACKUP_DATE}\`
+          - **File**: \`${ENCRYPTED_FILENAME}\`
+          - **Size**: \`${BACKUP_SIZE_MB} MB\` (${BACKUP_SIZE_BYTES} bytes)
+          - **Checksum (SHA-256)**: \`${BACKUP_CHECKSUM}\`
+          - **Encryption**: AES-256-CBC with PBKDF2 (100,000 iterations)
+          - **Artifact Retention**: \`${RETENTION_DAYS} days\`
+          - **Free Quota Cap**: \`${MAX_BACKUP_SIZE_MB} MB\`
+          - **Public Tables Preserved**: All application tables, triggers, sequences, functions, and RLS policies.
+          - **Auth UUIDs Preserved**: \`auth_trainers_mapping.json\` bundled inside encrypted archive.
+          - **Storage / Photos**: ⚠️ *NOT included in Phase 2A.*
+          EOF
