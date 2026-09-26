@@ -18,12 +18,13 @@ export async function GET(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Verify client belongs to coach
+  // Verify client belongs to coach and is active
   const { data: client, error: clientErr } = await supabase
     .from("clients")
     .select("id")
     .eq("id", id)
     .eq("coach_user_id", user.id)
+    .is("deleted_at", null)
     .single();
 
   if (clientErr || !client) {
@@ -80,12 +81,13 @@ export async function POST(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Verify client belongs to coach
+  // Verify client belongs to coach and is active
   const { data: client } = await supabase
     .from("clients")
     .select("id")
     .eq("id", id)
     .eq("coach_user_id", user.id)
+    .is("deleted_at", null)
     .single();
 
   if (!client) {

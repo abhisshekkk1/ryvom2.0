@@ -10,13 +10,43 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url);
   const showArchived = url.searchParams.get("archived") === "true";
+  const showDeleted = url.searchParams.get("deleted") === "true";
 
+  // ==============================================================================
+  // TODO(disaster-recovery-phase-2): Automated Permanent Purge Job
+  // Clients with deleted_at < NOW() - INTERVAL '30 days' should be purged by a scheduled
+  // background worker (e.g. pg_cron or Edge Function).
+  // NOTE: During Phase 1, permanent purge is intentionally deferred until the restore
+  // and offsite backup systems are verified in production.
+  // ==============================================================================
+
+  // Fetch soft-deleted clients for the "Recently Deleted" UI
+  if (showDeleted) {
+    const { data: deletedClients, error: deletedError } = await supabase
+      .from("clients")
+      .select("id, full_name, email, phone, goal, starting_weight, target_weight, target_date, active, is_self, deleted_at, created_at, updated_at")
+      .eq("coach_user_id", user.id)
+      .eq("is_self", false)
+      .not("deleted_at", "is", null)
+      .order("deleted_at", { ascending: false });
+
+    if (deletedError) {
+      return NextResponse.json({ error: deletedError.message }, { status: 500 });
+    }
+
+    return NextResponse.json({
+      clients: deletedClients || [],
+    });
+  }
+
+  // Normal active query: strictly excludes soft-deleted clients (deleted_at IS NULL)
   const { data: clients, error } = await supabase
     .from("clients")
-    .select("id, full_name, email, phone, goal, starting_weight, target_weight, target_date, active, created_at")
+    .select("id, full_name, email, phone, goal, starting_weight, target_weight, target_date, active, is_self, deleted_at, created_at, updated_at")
     .eq("coach_user_id", user.id)
     .eq("active", !showArchived)
     .eq("is_self", false)
+    .is("deleted_at", null)
     .order("full_name");
 
   if (error) {

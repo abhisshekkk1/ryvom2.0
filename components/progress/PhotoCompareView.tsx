@@ -5,6 +5,7 @@ import Image from "next/image";
 import { Camera, ArrowRight, Grid, Columns } from "lucide-react";
 import { CheckIn } from "@/lib/types";
 import { sortCheckInsChronologically } from "@/lib/progressAnalytics";
+import { isSignedPhotoUrl } from "@/lib/photoStorage";
 
 interface PhotoCompareViewProps {
   checkIns: CheckIn[];
@@ -57,12 +58,23 @@ export default function PhotoCompareView({ checkIns }: PhotoCompareViewProps) {
     setBeforeId(closest.id);
   };
 
-  const getPhotoUrl = (checkIn?: CheckIn, photoAngle: "front" | "side" | "back" = "front") => {
+  const getRawPhotoPath = (checkIn?: CheckIn, photoAngle: "front" | "side" | "back" = "front") => {
     if (!checkIn) return null;
     if (photoAngle === "front") return checkIn.photo_front_url;
     if (photoAngle === "side") return checkIn.photo_side_url;
     if (photoAngle === "back") return checkIn.photo_back_url;
     return null;
+  };
+
+  const getPhotoUrl = (checkIn?: CheckIn, photoAngle: "front" | "side" | "back" = "front") => {
+    const raw = getRawPhotoPath(checkIn, photoAngle);
+    if (!raw || !isSignedPhotoUrl(raw)) return null;
+    return raw;
+  };
+
+  const isPhotoPending = (checkIn?: CheckIn, photoAngle: "front" | "side" | "back" = "front") => {
+    const raw = getRawPhotoPath(checkIn, photoAngle);
+    return !!raw && !isSignedPhotoUrl(raw);
   };
 
   if (photoCheckIns.length === 0) {
@@ -223,6 +235,11 @@ export default function PhotoCompareView({ checkIns }: PhotoCompareViewProps) {
                     className="object-contain"
                     unoptimized
                   />
+                ) : isPhotoPending(beforeCheckIn, angle) ? (
+                  <div className="text-zinc-500 text-xs flex flex-col items-center gap-1.5 animate-pulse">
+                    <Camera className="w-6 h-6 opacity-60 text-amber-400" />
+                    <span>Loading secure photo...</span>
+                  </div>
                 ) : (
                   <div className="text-zinc-600 text-xs flex flex-col items-center gap-1">
                     <Camera className="w-6 h-6 opacity-40" />
@@ -275,6 +292,11 @@ export default function PhotoCompareView({ checkIns }: PhotoCompareViewProps) {
                     className="object-contain"
                     unoptimized
                   />
+                ) : isPhotoPending(afterCheckIn, angle) ? (
+                  <div className="text-zinc-500 text-xs flex flex-col items-center gap-1.5 animate-pulse">
+                    <Camera className="w-6 h-6 opacity-60 text-amber-400" />
+                    <span>Loading secure photo...</span>
+                  </div>
                 ) : (
                   <div className="text-zinc-600 text-xs flex flex-col items-center gap-1">
                     <Camera className="w-6 h-6 opacity-40" />
@@ -335,6 +357,11 @@ export default function PhotoCompareView({ checkIns }: PhotoCompareViewProps) {
                         className="object-cover"
                         unoptimized
                       />
+                    ) : isPhotoPending(c, angle) ? (
+                      <div className="text-zinc-500 text-[11px] text-center p-2 animate-pulse flex flex-col items-center gap-1">
+                        <Camera className="w-4 h-4 opacity-60 text-amber-400" />
+                        <span>Loading...</span>
+                      </div>
                     ) : (
                       <div className="text-zinc-600 text-[11px] text-center p-2">
                         No {angle} photo

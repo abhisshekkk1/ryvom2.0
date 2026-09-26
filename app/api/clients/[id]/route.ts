@@ -33,6 +33,7 @@ export async function GET(
     .select("*")
     .eq("id", id)
     .eq("coach_user_id", user.id)
+    .is("deleted_at", null)
     .maybeSingle();
 
   if (error) {
@@ -146,7 +147,7 @@ export async function GET(
   });
 }
 
-// PUT /api/clients/[id] — update client details
+// PUT /api/clients/[id] — update client details (active clients only)
 export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -178,6 +179,7 @@ export async function PUT(
     .update(updateData)
     .eq("id", id)
     .eq("coach_user_id", user.id)
+    .is("deleted_at", null)
     .select("*")
     .single();
 
@@ -187,23 +189,35 @@ export async function PUT(
   return NextResponse.json({ client: data });
 }
 
-// DELETE /api/clients/[id] — permanently delete a client (prefer archive via PUT active=false)
+// ==============================================================================
+// TODO(disaster-recovery-phase-2): Automated Permanent Purge Job
+// Clients with deleted_at < NOW() - INTERVAL '30 days' should be purged by a scheduled
+// background worker (e.g. pg_cron or Edge Function).
+// NOTE: During Phase 1, permanent purge is intentionally deferred until the restore
+// and offsite backup systems are verified in production.
+// ==============================================================================
+
+// DELETE /api/clients/[id] — safe, recoverable soft-delete (preserves all related data & photos)
 export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+  if (!id || !UUID_REGEX.test(id)) {
+    return NextResponse.json({ error: "Invalid client ID format" }, { status: 400 });
+  }
+
   const { supabase, user } = await getCoachAuth();
   if (!supabase || !user)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  // Check if client exists and is not self profile
+  // 1. Check if client exists and is not self profile
   const { data: client } = await supabase
     .from("clients")
-    .select("is_self")
+    .select("is_self, deleted_at")
     .eq("id", id)
     .eq("coach_user_id", user.id)
-    .single();
+    .maybeSingle();
 
   if (!client)
     return NextResponse.json({ error: "Client not found" }, { status: 404 });
@@ -211,14 +225,26 @@ export async function DELETE(
   if (client.is_self)
     return NextResponse.json({ error: "Cannot delete coach personal profile" }, { status: 400 });
 
-  const { error } = await supabase
+  if (client.deleted_at) {
+    return NextResponse.json({ error: "Client is already deleted" }, { status: 400 });
+  }
+
+  // 2. Perform safe, non-destructive soft-delete (preserves check-ins, reviews, notes, and photos)
+  const { data: updated, error } = await supabase
     .from("clients")
-    .delete()
+    .update({ deleted_at: new Date().toISOString() })
     .eq("id", id)
-    .eq("coach_user_id", user.id);
+    .eq("coach_user_id", user.id)
+    .is("deleted_at", null)
+    .select("id, deleted_at")
+    .single();
 
   if (error)
     return NextResponse.json({ error: error.message }, { status: 500 });
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({
+    ok: true,
+    message: "Client moved to trash. Recovery available for 30 days.",
+    client: updated,
+  });
 }

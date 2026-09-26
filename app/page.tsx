@@ -12,6 +12,8 @@ import {
   AlertTriangle,
   TrendingUp,
   ArrowRight,
+  Trash2,
+  RotateCcw,
 } from "lucide-react";
 import Sidebar from "@/components/Sidebar";
 import Modal from "@/components/Modal";
@@ -24,6 +26,34 @@ import {
   formatDiff,
 } from "@/lib/progressAnalytics";
 import type { Client, CheckIn } from "@/lib/types";
+
+interface DeletedClientWithMeta extends Client {
+  deletedAgoText: string;
+  recoveryText: string;
+}
+
+function computeRetentionDetails(deletedAtIso: string | null | undefined, nowMs: number) {
+  const deletedAt = deletedAtIso ? new Date(deletedAtIso) : new Date(nowMs);
+  const diffMs = Math.max(0, nowMs - deletedAt.getTime());
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  const daysRemaining = Math.max(0, 30 - diffDays);
+
+  const deletedAgoText =
+    diffDays === 0
+      ? "Deleted today"
+      : diffDays === 1
+      ? "Deleted 1 day ago"
+      : `Deleted ${diffDays} days ago`;
+
+  const recoveryText =
+    daysRemaining === 0
+      ? "Recovery window ending today"
+      : daysRemaining === 1
+      ? "Recovery available for 1 more day"
+      : `Recovery available for ${daysRemaining} more days`;
+
+  return { deletedAgoText, recoveryText };
+}
 
 function Stat({
   label,
@@ -86,6 +116,11 @@ export default function Home() {
   const [addLoading, setAddLoading] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
 
+  const [deletedClients, setDeletedClients] = useState<DeletedClientWithMeta[]>([]);
+  const [restoringClientId, setRestoringClientId] = useState<string | null>(null);
+  const [restoreMessage, setRestoreMessage] = useState<string | null>(null);
+  const [restoreError, setRestoreError] = useState<string | null>(null);
+
   const loadData = useCallback(async () => {
     try {
       await Promise.resolve();
@@ -98,12 +133,67 @@ export default function Home() {
       if (typeof data.totalCheckins === "number") {
         setTotalCheckins(data.totalCheckins);
       }
+
+      // Load soft-deleted clients for the Recently Deleted / Trash section
+      try {
+        const deletedRes = await fetch("/api/clients?deleted=true");
+        if (deletedRes.ok) {
+          const deletedJson = await deletedRes.json();
+          const rawDeleted = (deletedJson.clients || []) as Client[];
+          const nowMs = Date.now();
+          const withMeta: DeletedClientWithMeta[] = rawDeleted.map((dc) => ({
+            ...dc,
+            ...computeRetentionDetails(dc.deleted_at, nowMs),
+          }));
+          setDeletedClients(withMeta);
+        }
+      } catch (dErr) {
+        console.warn("Failed to load deleted clients:", dErr);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load data");
     } finally {
       setLoading(false);
     }
   }, []);
+
+  async function handleRestoreClient(clientId: string, clientName: string) {
+    setRestoringClientId(clientId);
+    setRestoreMessage(null);
+    setRestoreError(null);
+
+    try {
+      const res = await fetch(`/api/clients/${clientId}/restore`, {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to restore client");
+      }
+
+      // Remove from recently deleted list immediately
+      setDeletedClients((prev) => prev.filter((c) => c.id !== clientId));
+
+      // Add to active clients list immediately
+      if (data.client) {
+        setClients((prev) => {
+          const exists = prev.some((c) => c.id === clientId);
+          if (exists) return prev;
+          return [...prev, data.client].sort((a, b) => a.full_name.localeCompare(b.full_name));
+        });
+      } else {
+        await loadData();
+      }
+
+      setRestoreMessage(`Client "${clientName}" restored successfully.`);
+      setTimeout(() => setRestoreMessage(null), 5000);
+    } catch (err: unknown) {
+      setRestoreError(err instanceof Error ? err.message : "Failed to restore client");
+      setTimeout(() => setRestoreError(null), 5000);
+    } finally {
+      setRestoringClientId(null);
+    }
+  }
 
   useEffect(() => {
     void loadData();
@@ -700,6 +790,76 @@ export default function Home() {
                   </div>
                 )}
               </div>
+
+              {/* ─── RECENTLY DELETED (TRASH) SECTION ─── */}
+              {deletedClients.length > 0 && (
+                <div className="mt-8 rounded-2xl border border-zinc-800 bg-[#0c0c0f] p-5 shadow-lg">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                        <Trash2 size={16} className="text-zinc-400" />
+                        <span>Recently Deleted</span>
+                        <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-400">
+                          {deletedClients.length}
+                        </span>
+                      </h3>
+                      <p className="text-xs text-zinc-500 mt-0.5">
+                        Clients are preserved for 30 days before permanent deletion.
+                      </p>
+                    </div>
+                  </div>
+
+                  {restoreMessage && (
+                    <div
+                      role="status"
+                      className="mb-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs text-emerald-300"
+                    >
+                      {restoreMessage}
+                    </div>
+                  )}
+
+                  {restoreError && (
+                    <div
+                      role="alert"
+                      className="mb-4 rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-300"
+                    >
+                      {restoreError}
+                    </div>
+                  )}
+
+                  <div className="divide-y divide-zinc-800/60">
+                    {deletedClients.map((dc) => (
+                      <div
+                        key={dc.id}
+                        className="py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 first:pt-0 last:pb-0"
+                      >
+                        <div>
+                          <div className="text-sm font-semibold text-zinc-200">
+                            {dc.full_name}
+                          </div>
+                          <div className="text-xs text-zinc-400 mt-0.5 flex items-center gap-2 flex-wrap">
+                            <span>{dc.deletedAgoText}</span>
+                            <span className="text-zinc-600">&bull;</span>
+                            <span className="text-amber-400/90 font-medium">{dc.recoveryText}</span>
+                          </div>
+                        </div>
+
+                        <div>
+                          <button
+                            type="button"
+                            onClick={() => handleRestoreClient(dc.id, dc.full_name)}
+                            disabled={restoringClientId === dc.id}
+                            className="px-3.5 py-1.5 rounded-xl border border-zinc-700 bg-zinc-900 hover:bg-zinc-800 text-xs font-semibold text-white transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+                          >
+                            <RotateCcw size={13} className={restoringClientId === dc.id ? "animate-spin" : ""} />
+                            <span>{restoringClientId === dc.id ? "Restoring…" : "Restore"}</span>
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </>
           )}
         </div>

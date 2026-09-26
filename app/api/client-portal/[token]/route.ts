@@ -56,7 +56,15 @@ export async function GET(
       .from("clients")
       .select("id,full_name,email,goal,starting_weight,target_weight,target_date,notes")
       .eq("id", clientId)
+      .is("deleted_at", null)
       .single();
+
+    if (!client) {
+      return NextResponse.json(
+        { error: "This client link is invalid or expired." },
+        { status: 404 }
+      );
+    }
 
     const { data: rawCheckins } = await db
       .from("check_ins")
@@ -118,6 +126,21 @@ export async function POST(
 
     const body = await request.json();
     const { db, clientId } = result;
+
+    // Verify client is active and not soft-deleted
+    const { data: client } = await db
+      .from("clients")
+      .select("id")
+      .eq("id", clientId)
+      .is("deleted_at", null)
+      .single();
+
+    if (!client) {
+      return NextResponse.json(
+        { error: "This client link is invalid or expired." },
+        { status: 404 }
+      );
+    }
 
     if (!body.week_ending) {
       return NextResponse.json({ error: "Week ending date is required." }, { status: 400 });

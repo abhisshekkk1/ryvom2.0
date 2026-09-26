@@ -30,12 +30,13 @@ export async function POST(
       return NextResponse.json({ error: "Invalid client ID format." }, { status: 400 });
     }
 
-    // Verify coach owns this client
+    // Verify coach owns this client and is active
     const { data: client, error: clientError } = await supabase
       .from("clients")
       .select("id")
       .eq("id", id)
       .eq("coach_user_id", user.id)
+      .is("deleted_at", null)
       .single();
 
     if (clientError || !client) {

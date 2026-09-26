@@ -11,7 +11,13 @@ export async function POST(request: Request) {
   if (!body.client_id || !UUID_REGEX.test(body.client_id)) {
     return NextResponse.json({ error: "A valid client_id UUID is required" }, { status: 400 });
   }
-  const { data: client } = await supabase.from("clients").select("id").eq("id", body.client_id).eq("coach_user_id", user.id).single();
+  const { data: client } = await supabase
+    .from("clients")
+    .select("id")
+    .eq("id", body.client_id)
+    .eq("coach_user_id", user.id)
+    .is("deleted_at", null)
+    .single();
   if (!client) return NextResponse.json({ error: "Client not found" }, { status: 404 });
   const token = randomBytes(32).toString("hex");
   const tokenHash = createHash("sha256").update(token).digest("hex");

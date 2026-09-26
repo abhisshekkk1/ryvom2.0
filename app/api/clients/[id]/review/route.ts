@@ -17,12 +17,13 @@ export async function POST(
   if (!supabase || !user)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  // Verify client belongs to this coach
+  // Verify client belongs to this coach and is active
   const { data: client } = await supabase
     .from("clients")
     .select("id")
     .eq("id", clientId)
     .eq("coach_user_id", user.id)
+    .is("deleted_at", null)
     .single();
 
   if (!client) {

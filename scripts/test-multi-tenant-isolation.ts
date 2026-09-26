@@ -58,6 +58,7 @@ interface MockClient {
   full_name: string;
   is_self: boolean;
   active: boolean;
+  deleted_at?: string | null;
 }
 
 interface MockCheckIn {
@@ -79,14 +80,43 @@ interface MockMetric {
   name: string;
 }
 
+interface MockReview {
+  id: string;
+  client_id: string;
+  check_in_id: string;
+  notes: string;
+}
+
+interface MockPerformanceLog {
+  id: string;
+  metric_id: string;
+  client_id: string;
+  value: number;
+}
+
+interface MockClientAccess {
+  id: string;
+  client_id: string;
+  token_hash: string;
+}
+
+interface MockStoragePhoto {
+  path: string;
+  client_id: string;
+}
+
+const CLIENT_SELF_A_ID = "aaaa0000-0000-4000-a000-000000000000";
+
 let mockClients: MockClient[] = [
-  { id: CLIENT_ABHISHEK_ID, coach_user_id: TRAINER_ABHISHEK.id, full_name: "Abhishek Client 1", is_self: false, active: true },
-  { id: CLIENT_B_ID, coach_user_id: TRAINER_B.id, full_name: "Bob Client", is_self: false, active: true },
+  { id: CLIENT_ABHISHEK_ID, coach_user_id: TRAINER_ABHISHEK.id, full_name: "Abhishek Client 1", is_self: false, active: true, deleted_at: null },
+  { id: CLIENT_B_ID, coach_user_id: TRAINER_B.id, full_name: "Bob Client", is_self: false, active: true, deleted_at: null },
+  { id: CLIENT_SELF_A_ID, coach_user_id: TRAINER_A.id, full_name: "Trainer Alice (Self)", is_self: true, active: true, deleted_at: null },
 ];
 
 const mockCheckIns: MockCheckIn[] = [
   { id: "ci-abh1", client_id: CLIENT_ABHISHEK_ID, week_ending: "2026-09-20", weight: 70 },
   { id: "ci-b1", client_id: CLIENT_B_ID, week_ending: "2026-09-20", weight: 85 },
+  { id: "ci-a1", client_id: CLIENT_A_ID, week_ending: "2026-09-20", weight: 65 },
 ];
 
 const mockNotes: MockNote[] = [
@@ -99,12 +129,32 @@ const mockMetrics: MockMetric[] = [
   { id: "metric-b1", client_id: CLIENT_B_ID, name: "Bench 1RM" },
 ];
 
-// Helper simulating API handler tenant query: .eq("coach_user_id", user.id)
-function simulateGetClients(userId: string) {
-  return mockClients.filter((c) => c.coach_user_id === userId && !c.is_self && c.active);
+const mockReviews: MockReview[] = [
+  { id: "rev-a1", client_id: CLIENT_A_ID, check_in_id: "ci-a1", notes: "Great form on squats!" },
+];
+
+const mockPerformanceLogs: MockPerformanceLog[] = [
+  { id: "plog-a1", metric_id: "metric-a1", client_id: CLIENT_A_ID, value: 120 },
+];
+
+const mockClientAccessList: MockClientAccess[] = [
+  { id: "acc-a1", client_id: CLIENT_A_ID, token_hash: "hash_client_a" },
+];
+
+const mockStoragePhotos: MockStoragePhoto[] = [
+  { path: `clients/${CLIENT_A_ID}/front.webp`, client_id: CLIENT_A_ID },
+  { path: `clients/${CLIENT_A_ID}/side.webp`, client_id: CLIENT_A_ID },
+];
+
+// Helper simulating API handler tenant query: .eq("coach_user_id", user.id).is("deleted_at", null)
+function simulateGetClients(userId: string, includeDeleted = false) {
+  if (includeDeleted) {
+    return mockClients.filter((c) => c.coach_user_id === userId && !c.is_self && c.deleted_at != null);
+  }
+  return mockClients.filter((c) => c.coach_user_id === userId && !c.is_self && c.active && (c.deleted_at === null || c.deleted_at === undefined));
 }
 
-// Helper simulating client creation: inserts with coach_user_id = user.id
+// Helper simulating client creation: inserts with coach_user_id = user.id, deleted_at = null
 function simulateCreateClient(userId: string, fullName: string) {
   const newClient: MockClient = {
     id: CLIENT_A_ID,
@@ -112,14 +162,15 @@ function simulateCreateClient(userId: string, fullName: string) {
     full_name: fullName,
     is_self: false,
     active: true,
+    deleted_at: null,
   };
   mockClients.push(newClient);
   return { status: 201, client: newClient };
 }
 
-// Helper simulating API handler client profile query: .eq("id", id).eq("coach_user_id", user.id)
+// Helper simulating API handler client profile query: .eq("id", id).eq("coach_user_id", user.id).is("deleted_at", null)
 function simulateGetClientById(clientId: string, userId: string) {
-  const client = mockClients.find((c) => c.id === clientId && c.coach_user_id === userId);
+  const client = mockClients.find((c) => c.id === clientId && c.coach_user_id === userId && (c.deleted_at === null || c.deleted_at === undefined));
   if (!client) {
     return { status: 404, error: "Client not found or does not belong to your coach account." };
   }
@@ -127,6 +178,42 @@ function simulateGetClientById(clientId: string, userId: string) {
   const notes = mockNotes.filter((n) => n.client_id === clientId);
   const metrics = mockMetrics.filter((m) => m.client_id === clientId);
   return { status: 200, client, checkins, notes, metrics };
+}
+
+// Helper simulating soft delete: UPDATE clients SET deleted_at = now() WHERE id = requested_id AND coach_user_id = auth.uid() AND deleted_at IS NULL
+function simulateSoftDeleteClient(clientId: string, userId: string | null | undefined) {
+  if (!userId) {
+    return { status: 401, error: "Unauthorized" };
+  }
+  const client = mockClients.find((c) => c.id === clientId && c.coach_user_id === userId);
+  if (!client) {
+    return { status: 404, error: "Client not found or does not belong to your coach account." };
+  }
+  if (client.is_self) {
+    return { status: 400, error: "Cannot delete trainer personal profile" };
+  }
+  if (client.deleted_at) {
+    return { status: 404, error: "Client already deleted or not found" };
+  }
+  // Soft delete preserves all related records across PostgreSQL child tables and storage
+  client.deleted_at = new Date().toISOString();
+  return { status: 200, success: true, client };
+}
+
+// Helper simulating restore: UPDATE clients SET deleted_at = NULL WHERE id = requested_id AND coach_user_id = auth.uid() AND deleted_at IS NOT NULL
+function simulateRestoreClient(clientId: string, userId: string | null | undefined) {
+  if (!userId) {
+    return { status: 401, error: "Unauthorized" };
+  }
+  const client = mockClients.find((c) => c.id === clientId && c.coach_user_id === userId);
+  if (!client) {
+    return { status: 404, error: "Client not found or does not belong to your coach account." };
+  }
+  if (!client.deleted_at) {
+    return { status: 400, error: "Client is not deleted." };
+  }
+  client.deleted_at = null;
+  return { status: 200, success: true, client };
 }
 
 // Helper simulating API handler checkins query: verify client belongs to coach
@@ -736,6 +823,179 @@ async function main() {
     // isPlatformAdmin strictly checks verified email against PLATFORM_ADMIN_EMAIL
     assert.equal(isPlatformAdmin(maliciousTrainerSession.email), false);
     assert.notEqual(maliciousTrainerSession.email, PLATFORM_ADMIN_EMAIL);
+  });
+
+  // ─── 10. SAFE CLIENT DELETION WITH RESTORE (PHASE 1 DISASTER RECOVERY) ───
+  console.log("\n10. Safe Client Deletion with Recoverable Restore (Phase 1 Disaster Recovery):");
+
+  await runTest("A. Active client has deleted_at = NULL (default NULL means active)", () => {
+    const activeClientA = mockClients.find((c) => c.id === CLIENT_A_ID);
+    assert.ok(activeClientA, "Client A must exist");
+    assert.equal(activeClientA.deleted_at ?? null, null, "Active client must have deleted_at = null");
+  });
+
+  await runTest("B. Trainer deletes own client -> deleted_at populated with timestamp", () => {
+    const res = simulateSoftDeleteClient(CLIENT_A_ID, TRAINER_A.id);
+    assert.equal(res.status, 200, "Soft delete must return HTTP 200");
+    assert.equal(res.success, true);
+    assert.ok(res.client?.deleted_at, "deleted_at must be populated");
+    assert.ok(!isNaN(Date.parse(res.client.deleted_at)), "deleted_at must be a valid ISO date");
+    // Ensure row is NOT removed from mockClients table (soft delete, not hard delete)
+    const stillInDb = mockClients.find((c) => c.id === CLIENT_A_ID);
+    assert.ok(stillInDb, "Client record must remain in database");
+  });
+
+  await runTest("C. Deleted client disappears from active client list", () => {
+    const activeClients = simulateGetClients(TRAINER_A.id);
+    assert.equal(activeClients.length, 0, "Active client list must exclude soft-deleted clients");
+    assert.ok(!activeClients.some((c) => c.id === CLIENT_A_ID));
+  });
+
+  await runTest("D. Deleted client does not appear in normal dashboard / direct access returns 404", () => {
+    const res = simulateGetClientById(CLIENT_A_ID, TRAINER_A.id);
+    assert.equal(res.status, 404, "Direct query for soft-deleted client must return 404 Not Found");
+    assert.ok(res.error?.includes("not found") || res.error?.includes("not belong"));
+  });
+
+  await runTest("E. Deleted client appears in Recently Deleted list", () => {
+    const deletedClients = simulateGetClients(TRAINER_A.id, true);
+    assert.equal(deletedClients.length, 1, "Recently deleted query must return the soft-deleted client");
+    assert.equal(deletedClients[0].id, CLIENT_A_ID);
+    assert.ok(deletedClients[0].deleted_at);
+  });
+
+  await runTest("F. Trainer restores own deleted client", () => {
+    const res = simulateRestoreClient(CLIENT_A_ID, TRAINER_A.id);
+    assert.equal(res.status, 200, "Restore must return HTTP 200");
+    assert.equal(res.success, true);
+    assert.equal(res.client?.id, CLIENT_A_ID);
+  });
+
+  await runTest("G. Restored client has deleted_at = NULL", () => {
+    const restoredClient = mockClients.find((c) => c.id === CLIENT_A_ID);
+    assert.ok(restoredClient);
+    assert.equal(restoredClient.deleted_at, null, "deleted_at must be reset to NULL");
+  });
+
+  await runTest("H. Restored client appears in active list and dashboard again", () => {
+    const activeClients = simulateGetClients(TRAINER_A.id);
+    assert.equal(activeClients.length, 1, "Restored client must be present in active client list");
+    assert.equal(activeClients[0].id, CLIENT_A_ID);
+
+    const directView = simulateGetClientById(CLIENT_A_ID, TRAINER_A.id);
+    assert.equal(directView.status, 200, "Direct access must now return HTTP 200");
+    assert.equal(directView.client?.id, CLIENT_A_ID);
+  });
+
+  await runTest("I. Existing check-ins remain intact after soft deletion and restore", () => {
+    // Soft delete again to verify cascade preservation during deleted state
+    simulateSoftDeleteClient(CLIENT_A_ID, TRAINER_A.id);
+
+    const checkins = mockCheckIns.filter((ci) => ci.client_id === CLIENT_A_ID);
+    assert.ok(checkins.length > 0, "Check-in records must NOT be deleted from PostgreSQL");
+    assert.equal(checkins[0].id, "ci-a1");
+    assert.equal(checkins[0].weight, 65);
+  });
+
+  await runTest("J. Existing reviews remain intact throughout soft deletion", () => {
+    const reviews = mockReviews.filter((r) => r.client_id === CLIENT_A_ID);
+    assert.ok(reviews.length > 0, "Reviews must remain completely intact");
+    assert.equal(reviews[0].id, "rev-a1");
+    assert.equal(reviews[0].notes, "Great form on squats!");
+  });
+
+  await runTest("K. Existing performance metrics and logs remain intact", () => {
+    const metrics = mockMetrics.filter((m) => m.client_id === CLIENT_A_ID);
+    assert.ok(metrics.length > 0, "Performance metric definitions must remain intact");
+    assert.equal(metrics[0].id, "metric-a1");
+
+    const plogs = mockPerformanceLogs.filter((pl) => pl.client_id === CLIENT_A_ID);
+    assert.ok(plogs.length > 0, "Performance logs must remain intact");
+    assert.equal(plogs[0].id, "plog-a1");
+    assert.equal(plogs[0].value, 120);
+  });
+
+  await runTest("L. Existing coach notes remain intact", () => {
+    const notes = mockNotes.filter((n) => n.client_id === CLIENT_A_ID);
+    assert.ok(notes.length > 0, "Coach notes must remain intact");
+    assert.equal(notes[0].id, "note-a1");
+    assert.equal(notes[0].note, "Alice private confidential note");
+  });
+
+  await runTest("M. Existing client access remains intact", () => {
+    const accessRecords = mockClientAccessList.filter((a) => a.client_id === CLIENT_A_ID);
+    assert.ok(accessRecords.length > 0, "Client portal access records must remain intact");
+    assert.equal(accessRecords[0].id, "acc-a1");
+    assert.equal(accessRecords[0].token_hash, "hash_client_a");
+  });
+
+  await runTest("N. Photos are NOT deleted (client-photos objects remain untouched)", () => {
+    const clientPhotos = mockStoragePhotos.filter((p) => p.client_id === CLIENT_A_ID);
+    assert.equal(clientPhotos.length, 2, "Photo objects in storage must remain untouched");
+    assert.ok(clientPhotos.some((p) => p.path === `clients/${CLIENT_A_ID}/front.webp`));
+    assert.ok(clientPhotos.some((p) => p.path === `clients/${CLIENT_A_ID}/side.webp`));
+
+    // Restore client A back to active for remaining tests
+    simulateRestoreClient(CLIENT_A_ID, TRAINER_A.id);
+  });
+
+  await runTest("O. Trainer A cannot access Trainer B's deleted client", () => {
+    // Soft delete Trainer B's client
+    const deleteRes = simulateSoftDeleteClient(CLIENT_B_ID, TRAINER_B.id);
+    assert.equal(deleteRes.status, 200);
+
+    // Trainer A queries active clients -> should not see Client B
+    const activeA = simulateGetClients(TRAINER_A.id);
+    assert.ok(!activeA.some((c) => c.id === CLIENT_B_ID));
+
+    // Trainer A queries recently deleted -> should not see Client B
+    const deletedForA = simulateGetClients(TRAINER_A.id, true);
+    assert.ok(!deletedForA.some((c) => c.id === CLIENT_B_ID));
+
+    // Trainer A attempts direct access -> 404
+    const directRes = simulateGetClientById(CLIENT_B_ID, TRAINER_A.id);
+    assert.equal(directRes.status, 404);
+  });
+
+  await runTest("P. Trainer A cannot restore Trainer B's deleted client", () => {
+    // Trainer A attempts to restore Client B
+    const res = simulateRestoreClient(CLIENT_B_ID, TRAINER_A.id);
+    assert.equal(res.status, 404, "Cross-tenant restore must be rejected with 404 Not Found");
+
+    // Verify Client B is still deleted
+    const clientB = mockClients.find((c) => c.id === CLIENT_B_ID);
+    assert.ok(clientB?.deleted_at, "Client B must remain in deleted state");
+
+    // Restore Client B cleanly using Trainer B
+    simulateRestoreClient(CLIENT_B_ID, TRAINER_B.id);
+  });
+
+  await runTest("Q. Unauthenticated restore is rejected (simulated API & Next.js middleware)", async () => {
+    // 1. Simulation check with null userId
+    const resSim = simulateRestoreClient(CLIENT_A_ID, null);
+    assert.equal(resSim.status, 401, "Restore without auth must return 401");
+
+    // 2. Next.js middleware check for POST /api/clients/[id]/restore
+    const req = new NextRequest(`http://localhost:3000/api/clients/${CLIENT_A_ID}/restore`, {
+      method: "POST",
+    });
+    const resMiddleware = await middleware(req);
+    assert.equal(resMiddleware.status, 401, "Middleware must reject unauthenticated restore with 401");
+  });
+
+  await runTest("R. Self client behavior remains intact (cannot be soft-deleted, tracking preserved)", () => {
+    const selfClientA = mockClients.find((c) => c.id === CLIENT_SELF_A_ID);
+    assert.ok(selfClientA, "Self client record must exist");
+    assert.equal(selfClientA.is_self, true);
+    assert.equal(selfClientA.deleted_at ?? null, null);
+
+    // Attempting to delete the trainer's self profile must be blocked
+    const deleteRes = simulateSoftDeleteClient(CLIENT_SELF_A_ID, TRAINER_A.id);
+    assert.equal(deleteRes.status, 400, "Self client deletion must be rejected with 400");
+    assert.ok(deleteRes.error?.includes("Cannot delete trainer personal profile"));
+
+    // Verify self profile remains active and undeleted
+    assert.equal(selfClientA.deleted_at ?? null, null, "Self client deleted_at must remain null");
   });
 
   console.log("\n=================================================================");

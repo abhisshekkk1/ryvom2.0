@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import Image from "next/image";
@@ -59,6 +59,7 @@ import {
   formatNum,
   computePerformancePRs,
 } from "@/lib/progressAnalytics";
+import { isSignedPhotoUrl } from "@/lib/photoStorage";
 import type {
   Client,
   CheckIn,
@@ -164,6 +165,16 @@ export default function ClientProfilePage({
   });
   const [manualSubmitting, setManualSubmitting] = useState(false);
   const [photosSigned, setPhotosSigned] = useState(false);
+  const photosSignedRef = useRef(photosSigned);
+  const activeTabRef = useRef(activeTab);
+
+  useEffect(() => {
+    photosSignedRef.current = photosSigned;
+  }, [photosSigned]);
+
+  useEffect(() => {
+    activeTabRef.current = activeTab;
+  }, [activeTab]);
 
   // On-demand photo URL resolution: only resolve when the Photos tab is opened
   useEffect(() => {
@@ -189,8 +200,9 @@ export default function ClientProfilePage({
       setLoading(true);
       setError(null);
 
-      // Fetch client & check-ins (with consolidated initial data)
-      const res = await fetch(`/api/clients/${id}`);
+      // If already on the photos tab, request signed photo URLs directly in the initial request
+      const fetchPhotos = activeTabRef.current === "photos" || photosSignedRef.current;
+      const res = await fetch(`/api/clients/${id}${fetchPhotos ? "?photos=true" : ""}`);
       if (!res.ok) {
         if (res.status === 401) {
           router.push("/login");
@@ -209,7 +221,19 @@ export default function ClientProfilePage({
         throw new Error(errorMsg);
       }
       const json = await res.json();
-      setData(json);
+      if (fetchPhotos) {
+        setPhotosSigned(true);
+      }
+      setData((prev) => {
+        // If photos were previously signed in state but this fetch did not request photos, preserve signed checkins
+        if (!fetchPhotos && photosSignedRef.current && prev?.checkins) {
+          return {
+            ...json,
+            checkins: prev.checkins,
+          };
+        }
+        return json;
+      });
 
       // 1. If consolidated metrics and notes were returned in the initial payload, use them immediately
       if (Array.isArray(json.metrics) && Array.isArray(json.coachNotes)) {
@@ -1105,42 +1129,75 @@ export default function ClientProfilePage({
                               </span>
                               <div className="grid grid-cols-3 gap-2">
                                 {c.photo_front_url && (
-                                  <div className="relative aspect-[3/4] rounded-lg overflow-hidden border border-zinc-800 bg-zinc-950">
-                                    <Image
-                                      src={c.photo_front_url}
-                                      alt="Front"
-                                      fill
-                                      className="object-cover"
-                                      unoptimized
-                                    />
+                                  <div className="relative aspect-[3/4] rounded-lg overflow-hidden border border-zinc-800 bg-zinc-950 flex items-center justify-center">
+                                    {isSignedPhotoUrl(c.photo_front_url) ? (
+                                      <Image
+                                        src={c.photo_front_url}
+                                        alt="Front"
+                                        fill
+                                        className="object-cover"
+                                        unoptimized
+                                      />
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        onClick={() => setActiveTab("photos")}
+                                        className="text-[10px] text-zinc-500 hover:text-amber-400 p-2 flex flex-col items-center gap-1 transition-colors cursor-pointer"
+                                      >
+                                        <Camera className="w-4 h-4 text-amber-400 opacity-60" />
+                                        <span>View Photos</span>
+                                      </button>
+                                    )}
                                     <span className="absolute bottom-1 left-1 text-[9px] font-bold bg-black/70 px-1.5 py-0.5 rounded text-zinc-300">
                                       Front
                                     </span>
                                   </div>
                                 )}
                                 {c.photo_side_url && (
-                                  <div className="relative aspect-[3/4] rounded-lg overflow-hidden border border-zinc-800 bg-zinc-950">
-                                    <Image
-                                      src={c.photo_side_url}
-                                      alt="Side"
-                                      fill
-                                      className="object-cover"
-                                      unoptimized
-                                    />
+                                  <div className="relative aspect-[3/4] rounded-lg overflow-hidden border border-zinc-800 bg-zinc-950 flex items-center justify-center">
+                                    {isSignedPhotoUrl(c.photo_side_url) ? (
+                                      <Image
+                                        src={c.photo_side_url}
+                                        alt="Side"
+                                        fill
+                                        className="object-cover"
+                                        unoptimized
+                                      />
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        onClick={() => setActiveTab("photos")}
+                                        className="text-[10px] text-zinc-500 hover:text-amber-400 p-2 flex flex-col items-center gap-1 transition-colors cursor-pointer"
+                                      >
+                                        <Camera className="w-4 h-4 text-amber-400 opacity-60" />
+                                        <span>View Photos</span>
+                                      </button>
+                                    )}
                                     <span className="absolute bottom-1 left-1 text-[9px] font-bold bg-black/70 px-1.5 py-0.5 rounded text-zinc-300">
                                       Side
                                     </span>
                                   </div>
                                 )}
                                 {c.photo_back_url && (
-                                  <div className="relative aspect-[3/4] rounded-lg overflow-hidden border border-zinc-800 bg-zinc-950">
-                                    <Image
-                                      src={c.photo_back_url}
-                                      alt="Back"
-                                      fill
-                                      className="object-cover"
-                                      unoptimized
-                                    />
+                                  <div className="relative aspect-[3/4] rounded-lg overflow-hidden border border-zinc-800 bg-zinc-950 flex items-center justify-center">
+                                    {isSignedPhotoUrl(c.photo_back_url) ? (
+                                      <Image
+                                        src={c.photo_back_url}
+                                        alt="Back"
+                                        fill
+                                        className="object-cover"
+                                        unoptimized
+                                      />
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        onClick={() => setActiveTab("photos")}
+                                        className="text-[10px] text-zinc-500 hover:text-amber-400 p-2 flex flex-col items-center gap-1 transition-colors cursor-pointer"
+                                      >
+                                        <Camera className="w-4 h-4 text-amber-400 opacity-60" />
+                                        <span>View Photos</span>
+                                      </button>
+                                    )}
                                     <span className="absolute bottom-1 left-1 text-[9px] font-bold bg-black/70 px-1.5 py-0.5 rounded text-zinc-300">
                                       Back
                                     </span>

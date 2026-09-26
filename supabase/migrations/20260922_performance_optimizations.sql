@@ -24,6 +24,7 @@ create index if not exists client_coach_notes_client_date_idx
   on public.client_coach_notes (client_id, note_date desc);
 
 -- 6. Efficient RPC: Retrieve only the latest 2 check-ins per client in ONE query
+-- Hardened according to Supabase SECURITY DEFINER best practices
 create or replace function public.get_dashboard_checkins()
 returns table (
   id uuid,
@@ -39,6 +40,7 @@ returns table (
 )
 language sql
 security definer
+set search_path = ''
 stable
 as $$
   with ranked as (
@@ -75,3 +77,7 @@ as $$
   where rn <= 2
   order by week_ending desc;
 $$;
+
+-- 7. Restrict execution to authenticated users only (Supabase Security Best Practice)
+revoke execute on function public.get_dashboard_checkins() from public;
+grant execute on function public.get_dashboard_checkins() to authenticated;

@@ -210,6 +210,7 @@ async function main() {
       `/api/clients/${fakeId}/performance`,
       `/api/clients/${fakeId}/review`,
       `/api/clients/${fakeId}/upload`,
+      `/api/clients/${fakeId}/restore`,
     ];
     for (const ep of endpoints) {
       const res = await fetch(`${BASE_URL}${ep}`);

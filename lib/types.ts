@@ -13,6 +13,7 @@ export interface Client {
   notes: string | null;
   active: boolean;
   is_self?: boolean;
+  deleted_at?: string | null;
   created_at: string;
   updated_at: string;
 }
