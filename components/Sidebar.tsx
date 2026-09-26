@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { isPlatformAdmin } from "@/lib/adminConstants";
+import { resolveTrainerDisplayName } from "@/lib/profile";
 
 const BASE_NAV_ITEMS = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -32,20 +33,42 @@ export default function Sidebar() {
 
   useEffect(() => {
     const supabase = createBrowserSupabase();
+
+    // 1. Initial user load
     supabase.auth.getUser().then(({ data }) => {
       if (data?.user) {
         if (data.user.email && isPlatformAdmin(data.user.email)) {
           setIsAdmin(true);
         }
-        const metaName = data.user.user_metadata?.full_name || data.user.user_metadata?.name;
-        if (metaName && typeof metaName === "string" && metaName.trim()) {
-          setTrainerName(metaName.trim());
-        } else if (data.user.email) {
-          const localPart = data.user.email.split("@")[0];
-          setTrainerName(localPart.charAt(0).toUpperCase() + localPart.slice(1));
-        }
+        setTrainerName(resolveTrainerDisplayName(data.user));
       }
     });
+
+    // 2. Supabase auth state change listener (triggers on USER_UPDATED)
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        if (session.user.email && isPlatformAdmin(session.user.email)) {
+          setIsAdmin(true);
+        }
+        setTrainerName(resolveTrainerDisplayName(session.user));
+      }
+    });
+
+    // 3. Immediate custom event synchronization across components
+    const handleProfileUpdate = (e: Event) => {
+      const customEvent = e as CustomEvent<{ name?: string }>;
+      if (customEvent.detail?.name) {
+        setTrainerName(customEvent.detail.name);
+      }
+    };
+    window.addEventListener("ryvom:profile-updated", handleProfileUpdate);
+
+    return () => {
+      subscription.unsubscribe();
+      window.removeEventListener("ryvom:profile-updated", handleProfileUpdate);
+    };
   }, []);
 
   async function handleLogout() {

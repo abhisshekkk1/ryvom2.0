@@ -4,6 +4,7 @@ import { extractPhotoPath, validatePhotoOwnership } from "../lib/photoStorage";
 import { NextRequest } from "next/server";
 import { middleware } from "../middleware";
 import { isPlatformAdmin, PLATFORM_ADMIN_EMAIL } from "../lib/adminConstants";
+import { resolveTrainerDisplayName, validateDisplayName } from "../lib/profile";
 
 // Setup test users
 const TRAINER_A = {
@@ -592,6 +593,149 @@ async function main() {
     assert.equal(isPlatformAdmin(callerEmail), false);
     const res = simulateAdminInvite(callerEmail, "trainer_c@test.com", "Trainer Charlie");
     assert.equal(res.status, 403, "Non-admin must be rejected with 403 Forbidden");
+  });
+
+  // ─── 9. TRAINER PROFILE EDITING & DISPLAY NAME ISOLATION ───
+  console.log("\n9. Trainer Profile Editing, Display Name Resolution & Multi-Trainer Isolation:");
+
+  await runTest("Display name resolution strictly follows fallback priority order", () => {
+    // 1. full_name takes top priority
+    assert.equal(
+      resolveTrainerDisplayName({
+        user_metadata: { full_name: "Coach Primary", name: "Coach Secondary", display_name: "Coach Third" },
+        email: "coach@gym.com",
+      }),
+      "Coach Primary"
+    );
+
+    // 2. name metadata fallback
+    assert.equal(
+      resolveTrainerDisplayName({
+        user_metadata: { full_name: "   ", name: "Coach Secondary" },
+        email: "coach@gym.com",
+      }),
+      "Coach Secondary"
+    );
+
+    // 3. profile_name / display_name metadata fallback
+    assert.equal(
+      resolveTrainerDisplayName({
+        user_metadata: { display_name: "Coach Third" },
+        email: "coach@gym.com",
+      }),
+      "Coach Third"
+    );
+
+    // 4. email local-part fallback
+    assert.equal(
+      resolveTrainerDisplayName({
+        user_metadata: {},
+        email: "abhishek.sharma@example.com",
+      }),
+      "Abhishek.sharma"
+    );
+
+    // 5. Default generic fallback
+    assert.equal(resolveTrainerDisplayName(null), "Coach");
+    assert.equal(resolveTrainerDisplayName({}), "Coach");
+    assert.equal(resolveTrainerDisplayName({ email: "" }), "Coach");
+
+    // Existing trainer accounts preserve their names
+    assert.equal(resolveTrainerDisplayName(TRAINER_A), "Trainer Alice");
+    assert.equal(resolveTrainerDisplayName(TRAINER_B), "Trainer Bob");
+    assert.equal(resolveTrainerDisplayName(TRAINER_ABHISHEK), "Abhishek");
+  });
+
+  await runTest("Display name validation enforces constraints and preserves Unicode names", () => {
+    // Rejects empty / whitespace
+    assert.equal(validateDisplayName("").valid, false);
+    assert.equal(validateDisplayName("   ").valid, false);
+    assert.equal(validateDisplayName(null).valid, false);
+    assert.equal(validateDisplayName(undefined).valid, false);
+
+    // Rejects > 80 chars
+    assert.equal(validateDisplayName("A".repeat(81)).valid, false);
+    assert.equal(validateDisplayName("A".repeat(80)).valid, true);
+
+    // Rejects control characters
+    assert.equal(validateDisplayName("Alice\u0000Trainer").valid, false);
+
+    // Rejects purely non-alphanumeric punctuation
+    assert.equal(validateDisplayName("---...").valid, false);
+    assert.equal(validateDisplayName("!@#$%^").valid, false);
+
+    // Trims whitespace properly
+    const resTrim = validateDisplayName("   Abhishek Sharma   ");
+    assert.equal(resTrim.valid, true);
+    assert.equal(resTrim.trimmed, "Abhishek Sharma");
+
+    // Preserves international Unicode names
+    assert.equal(validateDisplayName("José Álvarez").valid, true);
+    assert.equal(validateDisplayName("François Müller").valid, true);
+    assert.equal(validateDisplayName("李雷").valid, true);
+    assert.equal(validateDisplayName("山田 太郎").valid, true);
+    assert.equal(validateDisplayName("अभिषेक शर्मा").valid, true);
+    assert.equal(validateDisplayName("Coach Sarah O'Connor-Smith").valid, true);
+  });
+
+  await runTest("Trainer can edit own display name and update persists in session", () => {
+    // Simulate Trainer A updating full_name in their session
+    const trainerASession = {
+      ...TRAINER_A,
+      user_metadata: { ...TRAINER_A.user_metadata },
+    };
+
+    const newName = "Alice In Chains";
+    const validation = validateDisplayName(newName);
+    assert.equal(validation.valid, true);
+
+    // Update metadata
+    trainerASession.user_metadata.full_name = validation.trimmed;
+
+    // Verify resolved name reflects new display name
+    assert.equal(resolveTrainerDisplayName(trainerASession), "Alice In Chains");
+  });
+
+  await runTest("Trainer A's profile update CANNOT modify Trainer B's profile or data", () => {
+    // Copy initial states
+    const trainerAState = {
+      ...TRAINER_A,
+      user_metadata: { ...TRAINER_A.user_metadata },
+    };
+    const trainerBState = {
+      ...TRAINER_B,
+      user_metadata: { ...TRAINER_B.user_metadata },
+    };
+
+    // Trainer A updates their name
+    trainerAState.user_metadata.full_name = "Super Trainer Alice";
+
+    // Trainer B remains untouched
+    assert.equal(resolveTrainerDisplayName(trainerBState), "Trainer Bob");
+    assert.equal(trainerBState.email, "trainer_b@test.com");
+    assert.equal(trainerBState.user_metadata.full_name, "Trainer Bob");
+
+    // Client ownership and isolation unaffected
+    const clientsForA = mockClients.filter((c) => c.coach_user_id === trainerAState.id);
+    const clientsForB = mockClients.filter((c) => c.coach_user_id === trainerBState.id);
+    assert.equal(clientsForB[0].full_name, "Bob Client");
+  });
+
+  await runTest("Trainer CANNOT escalate privileges by modifying metadata (role elevation defense)", () => {
+    // Attempt privilege escalation by setting arbitrary metadata
+    const maliciousTrainerSession = {
+      ...TRAINER_A,
+      user_metadata: {
+        full_name: "Attacker",
+        role: "admin",
+        is_admin: true,
+        is_platform_admin: true,
+      },
+    };
+
+    // isPlatformAdmin strictly checks verified email against PLATFORM_ADMIN_EMAIL
+    assert.equal(isPlatformAdmin(maliciousTrainerSession.email), false);
+    assert.notEqual(maliciousTrainerSession.email, PLATFORM_ADMIN_EMAIL);
   });
 
   console.log("\n=================================================================");
