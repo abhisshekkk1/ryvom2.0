@@ -31,7 +31,23 @@ export async function GET(request: Request) {
       .order("deleted_at", { ascending: false });
 
     if (deletedError) {
-      return NextResponse.json({ error: deletedError.message }, { status: 500 });
+      // If deleted_at column is not present in production database yet, return empty list gracefully
+      if (deletedError.code === "42703" || deletedError.message?.includes("deleted_at")) {
+        console.warn("[api/clients] Notice: 'deleted_at' column not yet present on clients table. Returning empty deleted clients list.");
+        return NextResponse.json({ clients: [] });
+      }
+
+      console.error("[api/clients] Database error in deleted clients query:", {
+        operation: "fetch_deleted_clients",
+        message: deletedError.message,
+        code: deletedError.code,
+        details: deletedError.details,
+        hint: deletedError.hint,
+      });
+      return NextResponse.json(
+        { error: "Failed to load deleted clients from database" },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json({
@@ -40,7 +56,7 @@ export async function GET(request: Request) {
   }
 
   // Normal active query: strictly excludes soft-deleted clients (deleted_at IS NULL)
-  const { data: clients, error } = await supabase
+  let { data: clients, error } = await supabase
     .from("clients")
     .select("id, full_name, email, phone, goal, starting_weight, target_weight, target_date, active, is_self, deleted_at, created_at, updated_at")
     .eq("coach_user_id", user.id)
@@ -49,8 +65,34 @@ export async function GET(request: Request) {
     .is("deleted_at", null)
     .order("full_name");
 
+  // Schema resilience: if 'deleted_at' column is not yet present on public.clients,
+  // gracefully fall back to active client query without deleted_at column
+  if (error && (error.code === "42703" || error.message?.includes("deleted_at"))) {
+    console.warn("[api/clients] Notice: 'deleted_at' column missing from public.clients. Falling back to active client query without deleted_at.");
+    const fallbackRes = await supabase
+      .from("clients")
+      .select("id, full_name, email, phone, goal, starting_weight, target_weight, target_date, active, is_self, created_at, updated_at")
+      .eq("coach_user_id", user.id)
+      .eq("active", !showArchived)
+      .eq("is_self", false)
+      .order("full_name");
+
+    clients = fallbackRes.data ? fallbackRes.data.map((c) => ({ ...c, deleted_at: null })) : null;
+    error = fallbackRes.error;
+  }
+
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error("[api/clients] Database error in active clients query:", {
+      operation: "fetch_active_clients",
+      message: error.message,
+      code: error.code,
+      details: error.details,
+      hint: error.hint,
+    });
+    return NextResponse.json(
+      { error: "Failed to load clients from database" },
+      { status: 500 }
+    );
   }
 
   if (!clients?.length) {

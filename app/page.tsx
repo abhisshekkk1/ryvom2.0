@@ -126,7 +126,10 @@ export default function Home() {
       await Promise.resolve();
       setError(null);
       const res = await fetch("/api/clients");
-      if (!res.ok) throw new Error("Failed to load clients");
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => null);
+        throw new Error(errorData?.error || `Failed to load clients (HTTP ${res.status})`);
+      }
       const data = await res.json();
       setClients(data.clients || []);
       setCheckins(data.checkins || []);

@@ -28,7 +28,7 @@ export async function GET(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { data: client, error } = await supabase
+  let { data: client, error } = await supabase
     .from("clients")
     .select("*")
     .eq("id", id)
@@ -36,8 +36,23 @@ export async function GET(
     .is("deleted_at", null)
     .maybeSingle();
 
+  if (error && (error.code === "42703" || error.message?.includes("deleted_at"))) {
+    const fallback = await supabase
+      .from("clients")
+      .select("*")
+      .eq("id", id)
+      .eq("coach_user_id", user.id)
+      .maybeSingle();
+    client = fallback.data;
+    error = fallback.error;
+  }
+
   if (error) {
-    console.error("Database query error for client:", error);
+    console.error("[api/clients/[id]] Database query error for client:", {
+      operation: "get_client_by_id",
+      message: error.message,
+      code: error.code,
+    });
     return NextResponse.json(
       { error: `Database error: ${error.message}` },
       { status: 500 }
