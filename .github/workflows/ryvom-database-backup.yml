@@ -41,6 +41,7 @@ jobs:
         env:
           RYVOM_DB_URL: ${{ secrets.RYVOM_DB_URL }}
           RYVOM_BACKUP_ENCRYPTION_KEY: ${{ secrets.RYVOM_BACKUP_ENCRYPTION_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           if [ -z "$RYVOM_DB_URL" ]; then
             echo "::error::Missing required secret: RYVOM_DB_URL"
@@ -58,6 +59,9 @@ jobs:
           # Ensure secrets are masked in workflow logs
           echo "::add-mask::$RYVOM_DB_URL"
           echo "::add-mask::$RYVOM_BACKUP_ENCRYPTION_KEY"
+          if [ -n "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+            echo "::add-mask::$SUPABASE_SERVICE_ROLE_KEY"
+          fi
           echo "✓ Required secrets present and masked."
 
       - name: Prepare Backup Staging
@@ -258,32 +262,122 @@ jobs:
           rm -rf verify_staging
           echo "✓ Decryption and structural verification SUCCEEDED."
 
-      - name: Upload Backup Artifact to GitHub Actions
+      - name: Enumerate & Export Storage Photos (Phase 2B)
+        env:
+          RYVOM_DB_URL: ${{ secrets.RYVOM_DB_URL }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || 'https://kfhwmkmxxdzgeeyuxizx.supabase.co' }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          echo "==> Exporting client-photos storage objects..."
+          mkdir -p backup_photos
+          node scripts/dr-backup-photos.mjs backup_photos
+
+          PHOTO_COUNT=$(jq '.total_objects' backup_photos/manifest.json || echo "0")
+          PHOTO_BYTES=$(jq '.total_bytes' backup_photos/manifest.json || echo "0")
+          PHOTO_MB=$(awk "BEGIN {printf \"%.2f\", $PHOTO_BYTES / 1048576}")
+          echo "PHOTO_COUNT=$PHOTO_COUNT" >> $GITHUB_ENV
+          echo "PHOTO_BYTES=$PHOTO_BYTES" >> $GITHUB_ENV
+          echo "PHOTO_MB=$PHOTO_MB" >> $GITHUB_ENV
+          echo "Exported ${PHOTO_COUNT} photos (${PHOTO_MB} MB)."
+
+      - name: Package & Encrypt Photo Backup (Phase 2B)
+        env:
+          RYVOM_BACKUP_ENCRYPTION_KEY: ${{ secrets.RYVOM_BACKUP_ENCRYPTION_KEY }}
+        run: |
+          PHOTO_TAR="backup_artifacts/ryvom_photos.tar"
+          PHOTO_ENC="backup_artifacts/ryvom_photos.tar.enc"
+
+          echo "==> Archiving photos (uncompressed tar to avoid wasting runner CPU on already-compressed images)..."
+          tar -cf "$PHOTO_TAR" -C backup_photos .
+
+          echo "==> Encrypting photo archive with AES-256-CBC PBKDF2 (100,000 iterations)..."
+          openssl enc -aes-256-cbc -salt -pbkdf2 -iter 100000 \
+            -in "$PHOTO_TAR" \
+            -out "$PHOTO_ENC" \
+            -pass env:RYVOM_BACKUP_ENCRYPTION_KEY
+
+          # Copy non-sensitive photos manifest to artifacts
+          cp backup_photos/manifest.json backup_artifacts/photos_manifest.json
+
+          # Securely destroy plaintext temporary files immediately
+          rm -rf backup_photos "$PHOTO_TAR"
+
+          PHOTO_ENC_BYTES=$(stat -c%s "$PHOTO_ENC")
+          PHOTO_ENC_MB=$(awk "BEGIN {printf \"%.2f\", $PHOTO_ENC_BYTES / 1048576}")
+          PHOTO_ENC_HASH=$(sha256sum "$PHOTO_ENC" | awk '{print $1}')
+          echo "$PHOTO_ENC_HASH  ryvom_photos.tar.enc" > "${PHOTO_ENC}.sha256"
+
+          echo "PHOTO_ENC_BYTES=$PHOTO_ENC_BYTES" >> $GITHUB_ENV
+          echo "PHOTO_ENC_MB=$PHOTO_ENC_MB" >> $GITHUB_ENV
+          echo "PHOTO_ENC_HASH=$PHOTO_ENC_HASH" >> $GITHUB_ENV
+          echo "Encrypted photo archive size: ${PHOTO_ENC_MB} MB (${PHOTO_ENC_BYTES} bytes)"
+          echo "SHA-256: ${PHOTO_ENC_HASH}"
+
+      - name: Verify Photo Decryption & Integrity (Phase 2B)
+        env:
+          RYVOM_BACKUP_ENCRYPTION_KEY: ${{ secrets.RYVOM_BACKUP_ENCRYPTION_KEY }}
+        run: |
+          echo "==> Verifying photo backup decryption and SHA-256 integrity..."
+          mkdir -p verify_photos_staging
+          openssl enc -d -aes-256-cbc -pbkdf2 -iter 100000 \
+            -in "backup_artifacts/ryvom_photos.tar.enc" \
+            -out "verify_photos_staging/temp.tar" \
+            -pass env:RYVOM_BACKUP_ENCRYPTION_KEY
+
+          tar -xf "verify_photos_staging/temp.tar" -C verify_photos_staging
+          rm -f "verify_photos_staging/temp.tar"
+
+          node scripts/dr-backup-tools.mjs verify-photos verify_photos_staging/manifest.json verify_photos_staging/objects
+          rm -rf verify_photos_staging
+          echo "✓ Photo backup decryption and hash integrity SUCCEEDED."
+
+      - name: Upload Database Backup Artifact to GitHub Actions (7-Day Retention)
         uses: actions/upload-artifact@v4
         with:
           name: ryvom-database-backup-${{ env.BACKUP_DATE }}
           path: |
-            backup_artifacts/*.enc
+            backup_artifacts/ryvom-db-*.dump.gz.enc*
             backup_artifacts/manifest.json
-            backup_artifacts/*.sha256
+            backup_artifacts/*.dump.gz.enc.sha256
           retention-days: 7
+          if-no-files-found: error
+
+      - name: Upload Photo Backup Artifact to GitHub Actions (1-Day Retention)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ryvom-photos-backup-${{ env.BACKUP_DATE }}
+          path: |
+            backup_artifacts/ryvom_photos.tar.enc*
+            backup_artifacts/photos_manifest.json
+          retention-days: 1
           if-no-files-found: error
 
       - name: Publish Workflow Summary
         run: |
           cat << EOF >> $GITHUB_STEP_SUMMARY
-          ### 🛡️ RYVOM Database Backup Summary (Phase 2A)
+          ### 🛡️ RYVOM Disaster Recovery Backup Summary (Phase 2A + 2B)
 
+          #### 1. Database & Auth Backup (Phase 2A)
           - **Status**: ✅ Succeeded & Verified
           - **Date**: \`${BACKUP_DATE}\`
           - **File**: \`${ENCRYPTED_FILENAME}\`
           - **Size**: \`${BACKUP_SIZE_MB} MB\` (${BACKUP_SIZE_BYTES} bytes)
           - **Checksum (SHA-256)**: \`${BACKUP_CHECKSUM}\`
           - **Encryption**: AES-256-CBC with PBKDF2 (100,000 iterations)
-          - **Artifact Retention**: \`${RETENTION_DAYS} days\`
-          - **Free Quota Cap**: \`${MAX_BACKUP_SIZE_MB} MB\`
-          - **Public Tables Preserved**: All application tables, triggers, sequences, functions, and RLS policies.
-          - **Auth Credentials Preserved**: \`auth_data.sql\` included (passwords and identities preserved; zero plaintext secrets logged).
-          - **Auth UUIDs Preserved**: \`auth_trainers_mapping.json\` bundled inside encrypted archive.
-          - **Storage / Photos**: ⚠️ *NOT included in Phase 2A.*
+          - **Artifact Retention**: \`7 days\`
+          - **Public Tables**: Preserved (all schema, sequences, triggers, RLS policies)
+          - **Auth Credentials**: \`auth_data.sql\` included (passwords and identities preserved)
+          - **Auth UUIDs**: \`auth_trainers_mapping.json\` included
+
+          #### 2. Supabase Storage Photos Backup (Phase 2B)
+          - **Status**: ✅ Succeeded & Verified
+          - **File**: \`ryvom_photos.tar.enc\`
+          - **Total Objects**: \`${PHOTO_COUNT}\`
+          - **Raw Photos Size**: \`${PHOTO_MB} MB\` (${PHOTO_BYTES} bytes)
+          - **Encrypted Archive Size**: \`${PHOTO_ENC_MB} MB\` (${PHOTO_ENC_BYTES} bytes)
+          - **Checksum (SHA-256)**: \`${PHOTO_ENC_HASH}\`
+          - **Artifact Retention**: \`1 day\`
+          - **Integrity**: Every object verified via SHA-256 against manifest
+
+          > ⚠️ **Photo Retention Policy**: Photo backups currently use 1-day GitHub artifact retention as a temporary ₹0/month beta DR solution. This is not the final long-term photo archival strategy.
           EOF

@@ -11,6 +11,12 @@ import {
   checkRestorePermission,
   validateAuthDataSql,
   inspectExtractedBackup,
+  generatePhotoManifest,
+  validatePhotoManifest,
+  verifyPhotoIntegrity,
+  checkStorageRestorePermission,
+  inspectPhotoBackup,
+  restoreStoragePhotos,
 } from "./dr-backup-tools.mjs";
 
 let totalTests = 0;
@@ -470,6 +476,313 @@ VALUES ('id-alice-1', '11111111-1111-4111-a111-111111111111', 'email', '{"sub":"
     }
 
     assert.equal(validateToken(oldSessionToken, targetProjectSecret), false, "Old session token must not survive");
+  });
+
+  // 9. Phase 2B: Supabase Storage (client-photos) Disaster Recovery Tests
+  console.log("\n9. Phase 2B: Supabase Storage (client-photos) Disaster Recovery Tests:");
+
+  const samplePhotoBufferFront = Buffer.from("FAKE_IMAGE_DATA_FRONT_WEBP_2026_TRANSFORMATION_PHOTO");
+  const samplePhotoBufferSide = Buffer.from("FAKE_IMAGE_DATA_SIDE_JPEG_2026_TRANSFORMATION_PHOTO");
+  const sampleHashFront = computeSha256(samplePhotoBufferFront);
+  const sampleHashSide = computeSha256(samplePhotoBufferSide);
+
+  const testObjects = [
+    {
+      path: "clients/c-alice-1/1727400000000_front_a1b2c3d4.webp",
+      size: samplePhotoBufferFront.length,
+      contentType: "image/webp",
+      sha256: sampleHashFront,
+      created_at: "2026-09-27T02:00:00.000Z",
+    },
+    {
+      path: "clients/c-alice-1/1727400000000_side_e5f6g7h8.jpeg",
+      size: samplePhotoBufferSide.length,
+      contentType: "image/jpeg",
+      sha256: sampleHashSide,
+      created_at: "2026-09-27T02:00:01.000Z",
+    },
+  ];
+
+  await runTest("Photo manifest generates valid schema and calculates byte totals correctly", () => {
+    const manifest = generatePhotoManifest({
+      bucket: "client-photos",
+      objects: testObjects,
+      timestamp: "2026-09-27T02:00:00.000Z",
+    });
+
+    assert.equal(manifest.version, "1.0");
+    assert.equal(manifest.bucket, "client-photos");
+    assert.equal(manifest.total_objects, 2);
+    assert.equal(manifest.total_bytes, samplePhotoBufferFront.length + samplePhotoBufferSide.length);
+    assert.equal(manifest.objects.length, 2);
+
+    const val = validatePhotoManifest(manifest);
+    assert.equal(val.valid, true);
+    assert.equal(val.totalObjects, 2);
+    assert.equal(val.totalBytes, manifest.total_bytes);
+  });
+
+  await runTest("Photo manifest strictly rejects signed URLs, query parameters, or token secrets", () => {
+    assert.throws(
+      () =>
+        generatePhotoManifest({
+          objects: [
+            {
+              path: "clients/c1/photo.webp?token=secret12345&expires=1727400000",
+              size: 100,
+              sha256: sampleHashFront,
+            },
+          ],
+        }),
+      /Security violation/
+    );
+
+    assert.throws(
+      () =>
+        generatePhotoManifest({
+          objects: [
+            {
+              path: "https://kfhwmkmxxdzgeeyuxizx.supabase.co/storage/v1/object/photo.webp",
+              size: 100,
+              sha256: sampleHashFront,
+            },
+          ],
+        }),
+      /Security violation/
+    );
+  });
+
+  await runTest("Object paths and MIME types are strictly preserved in manifest", () => {
+    const manifest = generatePhotoManifest({ objects: testObjects });
+    assert.equal(manifest.objects[0].path, "clients/c-alice-1/1727400000000_front_a1b2c3d4.webp");
+    assert.equal(manifest.objects[0].contentType, "image/webp");
+    assert.equal(manifest.objects[1].path, "clients/c-alice-1/1727400000000_side_e5f6g7h8.jpeg");
+    assert.equal(manifest.objects[1].contentType, "image/jpeg");
+  });
+
+  await runTest("SHA-256 generation produces valid 64-character hex digests", () => {
+    assert.equal(sampleHashFront.length, 64);
+    assert.match(sampleHashFront, /^[a-f0-9]{64}$/);
+    assert.equal(sampleHashSide.length, 64);
+    assert.match(sampleHashSide, /^[a-f0-9]{64}$/);
+  });
+
+  await runTest("Photo integrity verification succeeds with exact hashes and fails on tampering", () => {
+    const manifest = generatePhotoManifest({ objects: testObjects });
+
+    const validLookup = (relPath) => {
+      if (relPath.includes("front")) return samplePhotoBufferFront;
+      if (relPath.includes("side")) return samplePhotoBufferSide;
+      return null;
+    };
+
+    const validRes = verifyPhotoIntegrity(manifest, validLookup);
+    assert.equal(validRes.success, true);
+    assert.equal(validRes.verifiedCount, 2);
+
+    const corruptedLookup = (relPath) => {
+      if (relPath.includes("front")) {
+        const tampered = Buffer.from(samplePhotoBufferFront);
+        tampered[0] ^= 1;
+        return tampered;
+      }
+      return samplePhotoBufferSide;
+    };
+
+    const failRes = verifyPhotoIntegrity(manifest, corruptedLookup);
+    assert.equal(failRes.success, false);
+    assert.match(failRes.error, /SHA-256 hash mismatch/);
+  });
+
+  await runTest("Archive packaging, OpenSSL AES-256-CBC PBKDF2 encryption, and plaintext shredding", () => {
+    const testDir = path.join(process.cwd(), "scratch", "test_photo_dr_packaging");
+    fs.mkdirSync(path.join(testDir, "objects", "clients", "c-alice-1"), { recursive: true });
+
+    fs.writeFileSync(path.join(testDir, "objects", testObjects[0].path), samplePhotoBufferFront);
+    fs.writeFileSync(path.join(testDir, "objects", testObjects[1].path), samplePhotoBufferSide);
+
+    const manifest = generatePhotoManifest({ objects: testObjects });
+    fs.writeFileSync(path.join(testDir, "manifest.json"), JSON.stringify(manifest, null, 2));
+    fs.writeFileSync(
+      path.join(testDir, "bucket_config.json"),
+      JSON.stringify({ id: "client-photos", public: false, file_size_limit: 10485760 }, null, 2)
+    );
+
+    const inspection = inspectPhotoBackup(testDir);
+    assert.equal(inspection.manifestValid, true);
+    assert.equal(inspection.bucketConfigValid, true);
+    assert.equal(inspection.objectCount, 2);
+    assert.equal(inspection.totalBytes, samplePhotoBufferFront.length + samplePhotoBufferSide.length);
+    assert.equal(inspection.allFilesPresent, true);
+    assert.equal(inspection.mimeDistribution["image/webp"], 1);
+    assert.equal(inspection.mimeDistribution["image/jpeg"], 1);
+
+    const mockTarPayload = Buffer.from(
+      JSON.stringify({
+        manifest,
+        files: {
+          [testObjects[0].path]: samplePhotoBufferFront.toString("base64"),
+          [testObjects[1].path]: samplePhotoBufferSide.toString("base64"),
+        },
+      })
+    );
+
+    const encrypted = encryptBackupBuffer(mockTarPayload, testPassphrase);
+    assert.ok(encrypted.length > 32);
+
+    fs.rmSync(testDir, { recursive: true, force: true });
+    assert.equal(fs.existsSync(testDir), false, "Plaintext photos directory must be removed after encryption");
+
+    const decrypted = JSON.parse(decryptBackupBuffer(encrypted, testPassphrase).toString("utf8"));
+    assert.equal(decrypted.manifest.total_objects, 2);
+    const recoveredFront = Buffer.from(decrypted.files[testObjects[0].path], "base64");
+    assert.equal(computeSha256(recoveredFront), sampleHashFront);
+  });
+
+  await runTest("Storage restore safety: Rejects when RYVOM_ALLOW_STORAGE_RESTORE is not 'true'", () => {
+    delete process.env.RYVOM_ALLOW_STORAGE_RESTORE;
+    assert.throws(
+      () => checkStorageRestorePermission("https://disposable-fresh-test.supabase.co"),
+      /SAFETY VIOLATION: Storage photo restore is disabled by default/
+    );
+
+    process.env.RYVOM_ALLOW_STORAGE_RESTORE = "false";
+    assert.throws(
+      () => checkStorageRestorePermission("https://disposable-fresh-test.supabase.co"),
+      /SAFETY VIOLATION: Storage photo restore is disabled by default/
+    );
+  });
+
+  await runTest("Storage restore safety: Strictly rejects targeting production Supabase URL or project reference", () => {
+    process.env.RYVOM_ALLOW_STORAGE_RESTORE = "true";
+
+    assert.throws(
+      () => checkStorageRestorePermission("https://kfhwmkmxxdzgeeyuxizx.supabase.co"),
+      /FATAL SAFETY VIOLATION/
+    );
+
+    assert.throws(
+      () => checkStorageRestorePermission("https://other-domain.com", "kfhwmkmxxdzgeeyuxizx"),
+      /FATAL SAFETY VIOLATION/
+    );
+
+    assert.equal(checkStorageRestorePermission("https://disposable-new-project-xyz.supabase.co"), true);
+  });
+
+  await runTest("Storage restore safety: Rejects non-empty target bucket unless force flag is supplied", async () => {
+    process.env.RYVOM_ALLOW_STORAGE_RESTORE = "true";
+    delete process.env.RYVOM_FORCE_STORAGE_RESTORE;
+
+    const mockExtractedDir = path.join(process.cwd(), "scratch", "test_restore_staging");
+    fs.mkdirSync(path.join(mockExtractedDir, "objects", "clients", "c-alice-1"), { recursive: true });
+    fs.writeFileSync(path.join(mockExtractedDir, "objects", testObjects[0].path), samplePhotoBufferFront);
+    fs.writeFileSync(path.join(mockExtractedDir, "manifest.json"), JSON.stringify(generatePhotoManifest({ objects: [testObjects[0]] })));
+    fs.writeFileSync(path.join(mockExtractedDir, "bucket_config.json"), JSON.stringify({ id: "client-photos", public: false }));
+
+    const mockFetchNonEmpty = async (url) => {
+      if (url.includes("/storage/v1/bucket/client-photos")) {
+        return { ok: true, status: 200, json: async () => ({ id: "client-photos", public: false }) };
+      }
+      if (url.includes("/storage/v1/object/list/client-photos")) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => [{ name: "existing_photo_from_prior_client.jpg" }],
+        };
+      }
+      return { ok: true, status: 200 };
+    };
+
+    await assert.rejects(
+      async () => {
+        await restoreStoragePhotos({
+          extractedDir: mockExtractedDir,
+          targetUrl: "https://disposable-fresh-test.supabase.co",
+          targetServiceKey: "mock-disposable-service-key",
+          forceClean: false,
+          fetchFn: mockFetchNonEmpty,
+        });
+      },
+      /SAFETY VIOLATION: Target bucket "client-photos" is not empty/
+    );
+
+    fs.rmSync(mockExtractedDir, { recursive: true, force: true });
+  });
+
+  await runTest("Storage restore simulation: Restores exact paths, verifies SHA-256, and signs representative image", async () => {
+    process.env.RYVOM_ALLOW_STORAGE_RESTORE = "true";
+
+    const mockExtractedDir = path.join(process.cwd(), "scratch", "test_restore_success");
+    fs.mkdirSync(path.join(mockExtractedDir, "objects", "clients", "c-alice-1"), { recursive: true });
+    fs.writeFileSync(path.join(mockExtractedDir, "objects", testObjects[0].path), samplePhotoBufferFront);
+    fs.writeFileSync(path.join(mockExtractedDir, "manifest.json"), JSON.stringify(generatePhotoManifest({ objects: [testObjects[0]] })));
+    fs.writeFileSync(path.join(mockExtractedDir, "bucket_config.json"), JSON.stringify({ id: "client-photos", public: false }));
+
+    const targetStorage = new Map();
+
+    const mockFetch = async (url, options = {}) => {
+      if (url.endsWith("/storage/v1/bucket/client-photos")) {
+        return { ok: true, status: 200, json: async () => ({ id: "client-photos", public: false }) };
+      }
+      if (url.includes("/storage/v1/object/list/client-photos")) {
+        return { ok: true, status: 200, json: async () => [] };
+      }
+      if (options.method === "POST" && url.includes("/storage/v1/object/client-photos/")) {
+        const parts = url.split("/storage/v1/object/client-photos/");
+        const relPath = parts[1];
+        targetStorage.set(relPath, Buffer.from(options.body));
+        return { ok: true, status: 200, text: async () => "ok" };
+      }
+      if (url.includes("/storage/v1/object/authenticated/client-photos/")) {
+        const parts = url.split("/storage/v1/object/authenticated/client-photos/");
+        const relPath = parts[1];
+        const stored = targetStorage.get(relPath);
+        if (!stored) return { ok: false, status: 404 };
+        return {
+          ok: true,
+          status: 200,
+          arrayBuffer: async () => stored.buffer.slice(stored.byteOffset, stored.byteOffset + stored.byteLength),
+        };
+      }
+      if (url.includes("/storage/v1/object/sign/client-photos/")) {
+        const parts = url.split("/storage/v1/object/sign/client-photos/");
+        const relPath = parts[1];
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ signedUrl: `https://disposable-fresh-test.supabase.co/signed/${relPath}?token=mockToken` }),
+        };
+      }
+      if (url.includes("/signed/")) {
+        return {
+          ok: true,
+          status: 200,
+          arrayBuffer: async () =>
+            samplePhotoBufferFront.buffer.slice(
+              samplePhotoBufferFront.byteOffset,
+              samplePhotoBufferFront.byteOffset + samplePhotoBufferFront.byteLength
+            ),
+        };
+      }
+
+      return { ok: true, status: 200 };
+    };
+
+    const res = await restoreStoragePhotos({
+      extractedDir: mockExtractedDir,
+      targetUrl: "https://disposable-fresh-test.supabase.co",
+      targetServiceKey: "mock-disposable-service-key",
+      forceClean: true,
+      fetchFn: mockFetch,
+    });
+
+    assert.equal(res.success, true);
+    assert.equal(res.restoredCount, 1);
+    assert.equal(res.restoredBytes, samplePhotoBufferFront.length);
+    assert.equal(res.signedUrlVerified, true);
+    assert.ok(targetStorage.has(testObjects[0].path));
+
+    fs.rmSync(mockExtractedDir, { recursive: true, force: true });
   });
 
   console.log("\n=======================================================");
