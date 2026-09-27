@@ -42,18 +42,21 @@ Supabase PostgreSQL (Production)
    - `public.performance_metrics` (custom strength and physique metrics)
    - `public.performance_logs` (historical metric logs)
    - All legacy and existing reconciled tables (`workout_logs`, `password_reset_requests`, etc.)
-2. **Schema & Logic**:
+2. **Database Schema & Logic**:
    - PostgreSQL table structures, primary keys, foreign keys, and indexes.
    - Row Level Security (RLS) policies.
    - Stored functions (e.g. `get_dashboard_checkins()`).
    - Sequences and data types.
-3. **Trainer Identity & UUID Mapping**:
-   - `auth_trainers_mapping.json`: Preserves `id` (UUID), `email`, `raw_user_meta_data` (trainer display name, role), and `created_at` from `auth.users`.
+3. **Trainer Authentication & Credential Records (`auth_data.sql`)**:
+   - `auth.users`: Preserves original `id` (UUID), `email`, `raw_user_meta_data`, and `encrypted_password` (bcrypt password hash).
+   - `auth.identities`: Preserves authentication provider identity linkages (`provider: 'email'`, identity data).
+4. **Trainer Identity Fallback Mapping (`auth_trainers_mapping.json`)**:
+   - Preserves non-sensitive mapping of `id`, `email`, `raw_user_meta_data`, and `created_at` as an immutable secondary fallback.
 
 ### NOT Protected in Phase 2A:
-- ❌ **Supabase Storage Objects / Photos**: Files stored in the `client-photos` bucket (e.g., front, side, and back progress photos) are **NOT backed up** in Phase 2A.
-- ❌ **Auth Passwords & Tokens**: User password hashes, refresh tokens, active session cookies, and multi-factor authentication (MFA) secrets in `auth.users` cannot be exported or naively restored due to Supabase Auth managed service architecture.
-- ❌ **External Backup Providers**: No paid cloud providers (AWS S3, Google Cloud, Backblaze B2, Cloudflare) are used.
+- ❌ **Supabase Storage Objects / Photos**: Files stored in the `client-photos` bucket (e.g., front, side, and back progress photos) are **NOT backed up** in Phase 2A. They will be addressed separately in Phase 2B.
+- ❌ **Transient Session State**: Active user sessions (`auth.sessions`), refresh tokens (`auth.refresh_tokens`), flow states, and audit logs are intentionally excluded. Trainers simply sign in once with their existing passwords upon project recovery.
+- ❌ **External Backup Providers**: No paid cloud providers (AWS S3, Google Cloud, Backblaze B2, Cloudflare) are used. Target cost remains ₹0.
 
 ---
 
@@ -67,7 +70,7 @@ GitHub Free accounts for private repositories provide:
 - **Daily Schedule**: Runs once every 24 hours at `02:00 UTC` (`07:30 IST`).
 - **Retention Period**: Set to **`7 days`** (`retention-days: 7`).
 - **Safety Cap / Threshold**: Configured to **`400 MB`** (`MAX_BACKUP_SIZE_MB: 400`).
-- **Cumulative Footprint**: Because the compressed database dump is currently small (< 5 MB), 7 daily backups consume approximately ~35 MB (< 7% of GitHub's 500 MB allowance). If the backup file ever exceeds 400 MB, the workflow aborts with an error rather than silently exhausting account quotas.
+- **Cumulative Footprint**: The compressed database dump and auth data currently total < 5 MB. 7 daily backups consume approximately ~35 MB (< 7% of GitHub's 500 MB allowance). If the backup file ever exceeds 400 MB, the workflow aborts with an error rather than silently exhausting account quotas.
 
 ---
 
@@ -144,43 +147,34 @@ tar -xzf decrypted.tar.gz -C ./extracted_backup
 ```bash
 ./scripts/dr-restore-helper.sh inspect ./extracted_backup
 ```
-This inspects the PostgreSQL dump table-of-contents without touching any database, listing public tables (`clients`, `check_ins`, `coach_reviews`, `performance_metrics`, etc.) and the trainer count in `auth_trainers_mapping.json`.
+This safely inspects the contents and prints summary metrics (public tables, trainer identity count, auth user count) **without printing sensitive credentials, emails, or password hashes**.
 
 ---
 
-## 7. How to Restore into a TEST Supabase Project
+## 7. How to Restore into a Fresh / Test Supabase Project
 
 > [!CAUTION]
 > **Production Guardrail:**
-> Restoration scripts strictly require `RYVOM_ALLOW_RESTORE=true`. Never run restore commands against the production database URL. Always restore into a designated test/staging Supabase project.
+> Restoration scripts strictly require `RYVOM_ALLOW_RESTORE=true`. Never run restore commands against the production database URL. Always restore into a designated clean test/staging Supabase project.
 
-### Step 1: Reconstruct Trainer Auth Accounts (UUID Preservation)
-In RYVOM, `public.clients.coach_user_id` has a foreign key constraint referencing `auth.users(id)`. To restore data cleanly without foreign key violations:
-1. Open `extracted_backup/auth_trainers_mapping.json`.
-2. For each trainer, recreate their account in the target Supabase project using their **exact preserved UUID**:
-   ```javascript
-   // Using Supabase Admin Client in a migration script:
-   await supabaseAdmin.auth.admin.createUser({
-     id: trainer.id, // Preserves the exact UUID referenced by public.clients
-     email: trainer.email,
-     user_metadata: trainer.raw_user_meta_data,
-     email_confirm: true,
-   });
-   ```
-3. Alternatively, defer foreign key checks during initial schema restoration if restoring without recreating users first.
+### Step 1: Initialize Clean Target Project
+1. Create a fresh Supabase project. Supabase will automatically provision the default `auth` and `storage` schemas.
+2. Ensure the project is clean (do not manually create users in the dashboard prior to restore, to avoid primary key or email collisions).
 
-### Step 2: Apply Database Schema Migrations
-In the test Supabase project, execute existing migrations from `supabase/migrations/` in chronological order to initialize tables, types, and functions.
-
-### Step 3: Restore Database Tables & Data
+### Step 2: Restore Auth Records (`auth_data.sql`)
+Because `public.clients.coach_user_id` has a foreign key constraint referencing `auth.users(id)`, Auth user records must be restored first:
 ```bash
 export RYVOM_ALLOW_RESTORE=true
-export TARGET_TEST_DB="postgresql://postgres:[PASSWORD]@db.[TEST_PROJECT_REF].supabase.co:5432/postgres"
+export TARGET_TEST_DB="postgresql://postgres:[PASSWORD]@db.[TEST_REF].supabase.co:5432/postgres"
 
-# Execute restoration using helper script:
-./scripts/dr-restore-helper.sh restore-test-db ./extracted_backup "$TARGET_TEST_DB"
+# Step 2a: Restore Auth users and identities
+psql "$TARGET_TEST_DB" -f ./extracted_backup/auth_data.sql
+```
+*Note: This preserves original UUIDs, emails, coach metadata, and bcrypt password hashes.*
 
-# Or manually via pg_restore:
+### Step 3: Restore Public Application Schema & Data
+```bash
+# Step 3a: Restore public tables and data
 pg_restore \
   --clean \
   --if-exists \
@@ -189,22 +183,33 @@ pg_restore \
   --dbname="$TARGET_TEST_DB" \
   ./extracted_backup/ryvom_public.dump
 ```
+Because `auth.users` is already populated with the preserved trainer UUIDs, foreign key constraints in `public.clients` resolve seamlessly.
+
+*Alternatively, the helper script automates both steps safely:*
+```bash
+./scripts/dr-restore-helper.sh restore-test-db ./extracted_backup "$TARGET_TEST_DB"
+```
+
+### Step 4: Update Application Configuration
+1. Update `.env.local` or environment variables with the new Supabase Project URL, Anon Key, and Service Role Key.
+2. Trainers can immediately sign in using their **existing email and password** (the bcrypt hashes in `auth.users` authenticate directly with Supabase GoTrue).
 
 ---
 
-## 8. Auth Restoration Limitations
+## 8. Auth Restoration Invariants & Limitations
 
-1. **Password Hashes Are Not Restored**:
-   Because Supabase Auth manages encrypted password hashes internally, trainers will need to set a new password via the standard **"Forgot Password"** flow or receive an invitation link (`auth.admin.inviteUserByEmail`).
-2. **Active Sessions Are Inactive**:
-   All previous user sessions, JWTs, and refresh tokens are invalidated upon project recovery.
-3. **MFA Secrets**:
-   Any registered TOTP/authenticator devices must be re-enrolled.
+1. **Password Hashes Are Preserved**:
+   Because `encrypted_password` is preserved in `auth_data.sql`, users can log in with their existing passwords immediately.
+2. **Active Sessions Are Terminated**:
+   Old JWTs and session cookies signed with the previous project's JWT secret are not restored. Users must authenticate once to receive a new session.
+3. **MFA Enrolments**:
+   If multi-factor authentication was configured, TOTP devices must be re-registered.
+4. **Target Project Cleanliness**:
+   The target Supabase project must be fresh. Do not pre-create users with matching emails or UUIDs before running the restore.
 
 ---
 
 ## 9. Storage / Photos Status in Phase 2A
 
-- **Existing Photo URLs**: Check-in records in `public.check_ins` contain paths such as `clients/<client_id>/photo.webp`. These database records **are fully restored**.
-- **Photo Binary Files**: The actual `.webp`/`.jpeg` image objects stored in Supabase Storage (`client-photos`) are **NOT backed up** in Phase 2A.
-- If a complete Supabase project recreation occurs before Phase 2B (Storage backups) is implemented, the database will point to photo paths that will need to be re-uploaded or restored from future Storage backups.
+- **Database References Restored**: Check-in rows in `public.check_ins` contain paths like `clients/<client_id>/front.webp`. These records **are fully restored**.
+- **Photo Binary Files**: The actual `.webp`/`.jpeg` image objects stored in the `client-photos` Supabase Storage bucket are **NOT backed up in Phase 2A**. Storage backups will be implemented in Phase 2B.

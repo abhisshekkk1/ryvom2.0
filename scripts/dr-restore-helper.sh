@@ -130,16 +130,23 @@ case "$COMMAND" in
     fi
 
     if [[ -f "$AUTH_FILE" ]]; then
-      echo "✓ Found Auth Trainers Mapping: $AUTH_FILE"
       if command -v jq &> /dev/null; then
-        TRAINER_COUNT=$(jq '. | length' "$AUTH_FILE" 2>/dev/null || echo "unknown")
-        echo "  Trainer records found: $TRAINER_COUNT"
-        echo "  Trainer UUIDs & emails:"
-        jq -r '.[] | "    - \(.id) (\(.email))"' "$AUTH_FILE" 2>/dev/null || true
+        TRAINER_COUNT=$(jq '. | length' "$AUTH_FILE" 2>/dev/null || echo "0")
+        echo "✓ Found Auth Trainers Mapping: $TRAINER_COUNT trainer identities"
       fi
     else
-      echo "Warning: auth_trainers_mapping.json not found in $EXTRACTED_DIR"
+      echo "Notice: auth_trainers_mapping.json not found in $EXTRACTED_DIR"
     fi
+
+    AUTH_SQL="$EXTRACTED_DIR/auth_data.sql"
+    if [[ -f "$AUTH_SQL" ]]; then
+      USER_COUNT=$(grep -c "INSERT INTO auth\.users" "$AUTH_SQL" || true)
+      ID_COUNT=$(grep -c "INSERT INTO auth\.identities" "$AUTH_SQL" || true)
+      echo "✓ Found Auth Data SQL: $USER_COUNT user records, $ID_COUNT identity records"
+    else
+      echo "Notice: auth_data.sql not found in $EXTRACTED_DIR"
+    fi
+    echo "✓ Safe inspection complete (zero sensitive credentials exposed)."
     ;;
 
   restore-test-db)
@@ -151,7 +158,7 @@ case "$COMMAND" in
       usage
     fi
 
-    # SAFETY CHECK
+    # SAFETY CHECK 1: Explicit confirmation required
     if [[ "${RYVOM_ALLOW_RESTORE:-}" != "true" ]]; then
       echo "================================================================="
       echo "FATAL: RESTORE BLOCKED BY SAFETY GUARD."
@@ -162,16 +169,34 @@ case "$COMMAND" in
       exit 1
     fi
 
+    # SAFETY CHECK 2: Block production database target
+    if [[ -n "${RYVOM_DB_URL:-}" && "$TARGET_URL" == "$RYVOM_DB_URL" ]]; then
+      echo "================================================================="
+      echo "FATAL: RESTORE BLOCKED! Target URL matches production database (RYVOM_DB_URL)!"
+      echo "Restoration over the production database is strictly prohibited."
+      echo "================================================================="
+      exit 1
+    fi
+
     DUMP_FILE="$EXTRACTED_DIR/ryvom_public.dump"
+    AUTH_SQL="$EXTRACTED_DIR/auth_data.sql"
+
     if [[ ! -f "$DUMP_FILE" ]]; then
       echo "Error: Dump file $DUMP_FILE not found."
       exit 1
     fi
 
     echo "==> SAFETY CHECK PASSED (RYVOM_ALLOW_RESTORE=true)"
-    echo "==> Restoring public schema to target database..."
-    
-    # Run pg_restore with safety flags
+
+    # Step 1: Restore Auth records first (preserves UUIDs before foreign keys are created)
+    if [[ -f "$AUTH_SQL" ]]; then
+      echo "==> Step 1: Restoring Auth users and identities into target database..."
+      psql "$TARGET_URL" -f "$AUTH_SQL"
+      echo "✓ Auth users and identities restored."
+    fi
+
+    # Step 2: Restore public schema using pg_restore
+    echo "==> Step 2: Restoring public application schema to target database..."
     pg_restore \
       --clean \
       --if-exists \

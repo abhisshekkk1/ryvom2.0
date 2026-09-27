@@ -139,9 +139,89 @@ export function checkBackupSizeThreshold(sizeBytes, maxMb = 400) {
 }
 
 /**
- * Safeguard for restoration. Never restores without explicit RYVOM_ALLOW_RESTORE=true.
+ * Validates the safety and structure of auth_data.sql.
+ * Ensures:
+ * - Contains data-only inserts for auth.users and auth.identities
+ * - Does NOT contain DDL (CREATE TABLE, DROP, ALTER)
+ * - Does NOT contain transient session or migration tables (auth.sessions, auth.refresh_tokens, auth.schema_migrations)
  */
-export function checkRestorePermission() {
+export function validateAuthDataSql(sqlContent) {
+  if (!sqlContent || typeof sqlContent !== "string") {
+    return { valid: false, error: "SQL content is empty or invalid." };
+  }
+
+  // Safety check 1: Reject unauthorized DDL
+  const ddlPattern = /\b(CREATE\s+(TABLE|SCHEMA|FUNCTION|VIEW|TRIGGER)|DROP\s+(TABLE|SCHEMA)|ALTER\s+(TABLE|SCHEMA))\b/i;
+  if (ddlPattern.test(sqlContent)) {
+    return { valid: false, error: "Security violation: auth_data.sql contains unauthorized DDL statements!" };
+  }
+
+  // Safety check 2: Reject transient session or internal migration tables
+  const transientPattern = /\b(auth\.sessions|auth\.refresh_tokens|auth\.schema_migrations|auth\.audit_log_entries|auth\.flow_state|auth\.mfa_challenges)\b/i;
+  if (transientPattern.test(sqlContent)) {
+    return { valid: false, error: "Security violation: auth_data.sql contains transient session or internal migration tables!" };
+  }
+
+  // Count user and identity records
+  const userMatches = sqlContent.match(/INSERT\s+INTO\s+auth\.users\b/gi) || [];
+  const identityMatches = sqlContent.match(/INSERT\s+INTO\s+auth\.identities\b/gi) || [];
+
+  return {
+    valid: true,
+    usersCount: userMatches.length,
+    identitiesCount: identityMatches.length,
+  };
+}
+
+/**
+ * Inspects extracted backup directory and returns safe metadata ONLY.
+ * Never returns emails, password hashes, identity payloads, tokens, or secrets.
+ */
+export function inspectExtractedBackup(dirPath) {
+  if (!dirPath || !fs.existsSync(dirPath)) {
+    throw new Error(`Directory not found: ${dirPath}`);
+  }
+
+  const dumpPath = path.join(dirPath, "ryvom_public.dump");
+  const authMappingPath = path.join(dirPath, "auth_trainers_mapping.json");
+  const authDataSqlPath = path.join(dirPath, "auth_data.sql");
+
+  const metadata = {
+    publicDumpExists: fs.existsSync(dumpPath),
+    publicDumpSizeBytes: fs.existsSync(dumpPath) ? fs.statSync(dumpPath).size : 0,
+    authMappingExists: fs.existsSync(authMappingPath),
+    authMappingCount: 0,
+    authDataSqlExists: fs.existsSync(authDataSqlPath),
+    authUsersCount: 0,
+    authIdentitiesCount: 0,
+    authDataValid: false,
+  };
+
+  if (metadata.authMappingExists) {
+    try {
+      const parsed = JSON.parse(fs.readFileSync(authMappingPath, "utf8"));
+      metadata.authMappingCount = Array.isArray(parsed) ? parsed.length : 0;
+    } catch {
+      metadata.authMappingCount = 0;
+    }
+  }
+
+  if (metadata.authDataSqlExists) {
+    const content = fs.readFileSync(authDataSqlPath, "utf8");
+    const val = validateAuthDataSql(content);
+    metadata.authDataValid = val.valid;
+    metadata.authUsersCount = val.usersCount;
+    metadata.authIdentitiesCount = val.identitiesCount;
+  }
+
+  return metadata;
+}
+
+/**
+ * Safeguard for restoration. Never restores without explicit RYVOM_ALLOW_RESTORE=true.
+ * Also checks that target database does not match the production database.
+ */
+export function checkRestorePermission(targetDbUrl = null) {
   if (process.env.RYVOM_ALLOW_RESTORE !== "true") {
     throw new Error(
       "SAFETY VIOLATION: Database restore is disabled by default.\n" +
@@ -150,6 +230,16 @@ export function checkRestorePermission() {
       "Refusing to execute destructive action."
     );
   }
+
+  // Safety check: Prevent targeting production
+  const prodUrl = process.env.RYVOM_DB_URL;
+  if (targetDbUrl && prodUrl && targetDbUrl.trim() === prodUrl.trim()) {
+    throw new Error(
+      "FATAL SAFETY VIOLATION: Target database URL exactly matches production database (RYVOM_DB_URL).\n" +
+      "Restoration over the active production database is strictly prohibited!"
+    );
+  }
+
   return true;
 }
 
@@ -211,15 +301,33 @@ if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(import.met
         break;
       }
 
+      case "inspect": {
+        const [dirPath] = args;
+        if (!dirPath) {
+          console.error("Usage: node scripts/dr-backup-tools.mjs inspect <extracted-backup-dir>");
+          process.exit(1);
+        }
+        const meta = inspectExtractedBackup(dirPath);
+        console.log("==> Extracted Backup Safe Inspection Summary:");
+        console.log(`  - Public PostgreSQL Dump Exists: ${meta.publicDumpExists} (${meta.publicDumpSizeBytes} bytes)`);
+        console.log(`  - Auth Trainers Mapping Exists: ${meta.authMappingExists} (${meta.authMappingCount} trainer identities)`);
+        console.log(`  - Auth Data SQL Exists: ${meta.authDataSqlExists} (Valid: ${meta.authDataValid})`);
+        console.log(`  - Auth Users Count: ${meta.authUsersCount}`);
+        console.log(`  - Auth Identities Count: ${meta.authIdentitiesCount}`);
+        console.log("✓ Safe inspection complete (zero sensitive credentials exposed).");
+        break;
+      }
+
       case "restore-check": {
-        checkRestorePermission();
-        console.log("✓ RYVOM_ALLOW_RESTORE=true confirmed. Dry-run safety check passed.");
+        const [targetDbUrl] = args;
+        checkRestorePermission(targetDbUrl);
+        console.log("✓ RYVOM_ALLOW_RESTORE=true confirmed. Target database safety check passed.");
         break;
       }
 
       default:
         console.log("RYVOM Disaster Recovery Backup CLI Tools");
-        console.log("Available commands: verify-manifest, decrypt, check-size, restore-check");
+        console.log("Available commands: verify-manifest, decrypt, inspect, check-size, restore-check");
         break;
     }
   } catch (err) {

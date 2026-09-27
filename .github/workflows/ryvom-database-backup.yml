@@ -100,7 +100,23 @@ jobs:
             exit 1
           fi
 
-          echo "✓ Database dump and trainer mapping completed successfully."
+          echo "==> Exporting auth.users and auth.identities data-only for credential recovery..."
+          pg_dump "$RYVOM_DB_URL" \
+            --schema=auth \
+            --table=auth.users \
+            --table=auth.identities \
+            --data-only \
+            --column-inserts \
+            --no-owner \
+            --no-privileges \
+            --file="backup_artifacts/auth_data.sql"
+
+          if [ ! -s "backup_artifacts/auth_data.sql" ]; then
+            echo "::error::auth_data.sql export failed or produced an empty file."
+            exit 1
+          fi
+
+          echo "✓ Database dump, trainer mapping, and Auth data export completed successfully."
 
       - name: Compress & Encrypt Backup
         env:
@@ -109,9 +125,9 @@ jobs:
           ARCHIVE_NAME="ryvom-db-${BACKUP_DATE}.dump.gz"
           ENCRYPTED_NAME="${ARCHIVE_NAME}.enc"
 
-          echo "==> Archiving and compressing dump and trainer mapping..."
+          echo "==> Archiving and compressing dump, auth data, and trainer mapping..."
           tar -czf "backup_artifacts/${ARCHIVE_NAME}" \
-            -C backup_artifacts ryvom_public.dump auth_trainers_mapping.json
+            -C backup_artifacts ryvom_public.dump auth_trainers_mapping.json auth_data.sql
 
           echo "==> Encrypting archive with OpenSSL AES-256-CBC PBKDF2 (100,000 iterations)..."
           openssl enc -aes-256-cbc -salt -pbkdf2 -iter 100000 \
@@ -122,6 +138,7 @@ jobs:
           # Securely remove unencrypted raw files immediately
           rm -f backup_artifacts/ryvom_public.dump \
                 backup_artifacts/auth_trainers_mapping.json \
+                backup_artifacts/auth_data.sql \
                 "backup_artifacts/${ARCHIVE_NAME}"
 
           if [ ! -s "backup_artifacts/${ENCRYPTED_NAME}" ]; then
@@ -178,6 +195,7 @@ jobs:
             "format": "postgresql-custom-in-tar.gz.enc",
             "included_schemas": ["public"],
             "included_auth_mapping": ["auth.users(id, email, raw_user_meta_data, created_at)"],
+            "included_auth_data": ["auth.users(id, email, encrypted_password, raw_user_meta_data)", "auth.identities"],
             "retention_days": ${RETENTION_DAYS},
             "max_allowed_size_mb": ${MAX_BACKUP_SIZE_MB},
             "verification_status": "verified"
@@ -214,6 +232,28 @@ jobs:
           TRAINERS_COUNT=$(jq '. | length' verify_staging/auth_trainers_mapping.json)
           echo "Validated auth_trainers_mapping.json (found ${TRAINERS_COUNT} user identities)."
 
+          echo "==> Validating auth_data.sql structure (safe inspection without logging secrets)..."
+          if [ ! -s "verify_staging/auth_data.sql" ]; then
+            echo "::error::auth_data.sql was not found in decrypted archive."
+            exit 1
+          fi
+
+          # Safety check: Verify no DDL is present
+          if grep -iE "CREATE TABLE|CREATE SCHEMA|CREATE FUNCTION|DROP TABLE" verify_staging/auth_data.sql; then
+            echo "::error::auth_data.sql contains unauthorized DDL statements!"
+            exit 1
+          fi
+
+          # Safety check: Verify no transient session tables are present
+          if grep -iE "auth\.sessions|auth\.refresh_tokens|auth\.schema_migrations|auth\.audit_log_entries" verify_staging/auth_data.sql; then
+            echo "::error::auth_data.sql contains transient session or migration tables!"
+            exit 1
+          fi
+
+          AUTH_USERS_COUNT=$(grep -c "INSERT INTO auth\.users" verify_staging/auth_data.sql || true)
+          AUTH_ID_COUNT=$(grep -c "INSERT INTO auth\.identities" verify_staging/auth_data.sql || true)
+          echo "Validated auth_data.sql: contains ${AUTH_USERS_COUNT} user records and ${AUTH_ID_COUNT} identity records."
+
           # Clean up verification files
           rm -rf verify_staging
           echo "✓ Decryption and structural verification SUCCEEDED."
@@ -243,6 +283,7 @@ jobs:
           - **Artifact Retention**: \`${RETENTION_DAYS} days\`
           - **Free Quota Cap**: \`${MAX_BACKUP_SIZE_MB} MB\`
           - **Public Tables Preserved**: All application tables, triggers, sequences, functions, and RLS policies.
+          - **Auth Credentials Preserved**: \`auth_data.sql\` included (passwords and identities preserved; zero plaintext secrets logged).
           - **Auth UUIDs Preserved**: \`auth_trainers_mapping.json\` bundled inside encrypted archive.
           - **Storage / Photos**: ⚠️ *NOT included in Phase 2A.*
           EOF
